@@ -55,7 +55,7 @@ def gravity(x,z):
         
     return np.asarray([accelx,accelz])
 
-def propulsion(t):
+def propulsion(t):   #=> 시간에 따른 함수가 아닌 state에 따른 함수로 변경해서 policy로 나타내보는 것
     global max_thrust,Isp,tMECO,ve
     ##Timing for thrusters
     if t < tMECO:
@@ -122,6 +122,16 @@ def Derivatives(state,t):
     
     return statedot
 
+
+#이 예시는 ODE를 직접 풀어서 방정식을 구하는 형식, 우리는 RL에서 요구하는 
+#하나 하나의 step을 정의할 필요가 있음.
+#time_step은 delta t로 정의
+def take_step(state, t, time_step):
+    statedot = Derivatives(state,t)
+    new_state = state + statedot*time_step
+    return new_state, t+time_step
+
+
 ###########EVERYTHING BELOW HERE IS THE MAIN SCRIPT###
 
 ###Test Surface Gravity
@@ -146,9 +156,18 @@ stateinitial = np.asarray([x0,z0,velx0,velz0,mass0])
 tout = np.linspace(0,period,1000)
 
 
-
 ###Numerical Integration Call
-stateout = sci.odeint(Derivatives,stateinitial,tout)
+#stateout = sci.odeint(Derivatives,stateinitial,tout)
+#stateout 계산
+time_step = tout[1]-tout[0] #second
+stateout = np.empty((0,5))
+for t in tout:
+    if t == 0:
+        current_state = stateinitial
+    next_state = take_step(current_state, t, time_step)[0]
+    stateout = np.vstack((stateout, current_state))
+    current_state = next_state
+
 
 ###REname variables
 xout = stateout[:,0]
