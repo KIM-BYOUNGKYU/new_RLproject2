@@ -11,46 +11,57 @@ class Rocket(object):
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
+        
+
+        #기본적인 환경 configuration
+        self.G = 6.6742*10**-11;            #%%Gravitational constant (SI Unit)
+        self.g = 9.8                        #지표에서의 중력가속도
+        self.dt = 0.05                      # step의 시간간격
+        self.R_planet = 00000               # 지구반지름
+
+        #rocket configuration
         self.rocket_type = rocket_type
-        self.G = 6.6742*10**-11; #%%Gravitational constant (SI Unit)
-        self.g = 9.8
-        self.current_stage = 0 #현재 rocket의 stage
+        self.D = 10                                 # rocket diameter (meters)
+        self.H = [50,10,3]                          # rocket height (meters)
+        self.I = [[10000,1000,1000],
+                 [1000,100,100],
+                 [100,10,10]]                       # stage별 3축의 Moment of inertia
+        self.mass=[10000, 2000, 100]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
+        self.fuel_mass=[7000,1800, 0]               # stage별 가용 연료 질량
+        self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
+        self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
         
-        self.H = [50,10]  # rocket height (meters)
-        self.I = 1/12*self.H*self.H  # Moment of inertia
-        
-        self.dt = 0.05
-        
-        self.R_planet = 00000
-        self.mass=[10000, 2000, 100] #rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
-        self.CD = [0.4839, 0, 0]  #stage별 coefficient of drag 공기저항 계수입니다.
-        self.num_engines = [5,3]
-        self.r_engines = [3, 2] #각 단계의 엔진의 중심으로부터의 거리
+        #rocket engine configuration
+        self.num_engines = [5,3,1]           # stage별 engine의 개수
+        self.r_engines = [[(1,0,0),(0,1,0),(-1,0,0),(0,-1,0),(0,0,0)], 
+                          [(1,0,0),(-1/2, np.cos(np.pi/6),0),(-1/2, -np.cos(np.pi/6),0)],
+                          [(0,0,0)]]     
+                                            # stage의 엔진의 로켓 중심으로부터의 위치
+        self.Isp = 300                      # 로켓 엔진의 specific Impulse
+
+        #rocket 현재 상황
         self.state = self.create_initial_state()
-        self.engine_actor = policy.ActorCritic(input_dim=len(self.state), output_dim=len(2*sum(self.num_engines)))
-        self.action_table = self.create_action_table()
-
-        self.state_dims = 22 # x, z, vx, vz, theta, vtheta, phi0~4, phi5~7, f0~4, f5~7
-        self.action_dims = len(self.action_table)
-
-        '''if path_to_bg_img is None:
-            path_to_bg_img = task+'.jpg'
-        self.bg_img = utils.load_bg_img(path_to_bg_img, w=self.viewport_w, h=self.viewport_h)'''
-
+        self.step_id = 0
         self.state_buffer = []
+        self.already_crash = False
+        self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
+        self.action_table = self.create_action_table()
+        self.state_dims = len(self.state)
+        self.action_dims = len(self.action_table)
+        
 
     def reset(self, state_dict=None):
 
         if state_dict is None:
-            self.state = self.create_random_state()
+            self.state = self.create_initial_state()
         else:
             self.state = state_dict
 
         self.state_buffer = []
         self.step_id = 0
-        self.already_landing = False
+        self.already_crach = False
         cv2.destroyAllWindows()
-        return self.flatten(self.state)
+        return self.state
 
     def create_action_table(self):
         f0 = 0.2 * self.g  # thrust
@@ -65,6 +76,19 @@ class Rocket(object):
                         [f2, vphi0], [f2, vphi1], [f2, vphi2]
                         ]
         return action_table
+
+    def get_aerofriction(self, distance):
+        #input: distance from the centor of the Earth
+        #output: aerofriction vector
+
+        stage = self.state[5]
+        velocity = self.state[1]
+        altitude = distance - Rplanet ##altitude above the surface
+        rho = aeroModel.getDensity(altitude) ##air density
+        V = np.sqrt(velocity.dot(velocity))
+        qinf = (np.pi/8.0)*rho*(self.D**2)*abs(V)
+        aeroF = -qinf*self.CD*velocity
+        return aeroF
 
     def get_random_action(self):
         return random.randint(0, len(self.action_table)-1)
@@ -103,48 +127,56 @@ class Rocket(object):
     
     def get_propulsion(self, action):
         #input: action
-        #output: total_torque, total_thrust, mdot 
-        NumofUsedEngines= sum(self.num_engines[0:self.state[5]]) #state의 5번째 값은 current_Stage에 해당됨.
-        current_NumofEngines = self.num_engines[self.state[5]] 
+        #output: total_torque, total_thrust, mdot, 엔진 노즐의 angular velocity pair
+        stage = self.state[5]   #state의 5번째 값은 current_Stage에 해당됨.
+        
+        NumofUsedEngines= sum(self.num_engines[0:stage]) 
+        current_NumofEngines = self.num_engines[stage] 
+        
         thrusts = action[NumofUsedEngines*3 + current_NumofEngines*2:NumofUsedEngines*3 + current_NumofEngines*3]
         angle_thrusts = self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines]
-        x_thrust=0
-        y_thrust=0
-        z_thrust=0
         
-        for i in range(len(thrusts)):
-            z_thrust += -thrusts[i]*np.cos(angle_thrusts[i][1])
-            x_thrust += thrusts[i]*np.sin(angle_thrusts[i][1])*np.cos(angle_thrusts[i][0])
-            y_thrust += thrusts[i]*np.sin(angle_thrusts[i][1])*np.sin(angle_thrusts[i][0])
+        if self.state[4] <= 0: #연료가 없는 경우
+            total_torque = np.array([0,0,0])
+            total_thrust = np.array([0,0,0])
+            mdot = 0
+        else:
+            for i in range(len(thrusts)):
+                x_thrust = thrusts[i]*np.sin(angle_thrusts[i][1])*np.cos(angle_thrusts[i][0])
+                y_thrust = thrusts[i]*np.sin(angle_thrusts[i][1])*np.sin(angle_thrusts[i][0])
+                z_thrust = -thrusts[i]*np.cos(angle_thrusts[i][1])
+                thrust = np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
+
+                total_thrust += thrust                              # thrust vector의 합                            
+                total_torque += np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)        
+            mdot = - sum(thrusts) / (self.g * self.Isp)             # thrust에 따른 연료소모속도
         
-        behavior = self.engine_actor.get_action(state)
-        stage = self.current_stage
-        if current_stage == 
-        thrust = 
-        return thrust, [x_thrust, y_thrust, z_thrust]
+        angular_velocity0 = action[0:self.num_engines[0]] + action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]]
+        angular_velocity1 = action[self.num_engines[0]:self.num_engines[0]*2] + action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2]
+        angular_velocity_pair = np.array(list(zip(angular_velocity0, angular_velocity1)))
+
+        return total_torque, total_thrust, mdot, angular_velocity_pair
     
-    def get_Derivatives(self, state, t):
-        #input : state; x, z좌표, x, z방향 속도, 질량, 
-        x = state[0]
-        z = state[1]
-        velx = state[2]
-        velz = state[3]
-        mass = state[4]
-        xdot = velx
-        zdot = velz
-        
-        #gravitational force
-        g_a, r = self.get_gravity(x,z)
-        gravityF = g_a*mass
-        
-        #dragging force
-        altitude = r - Rplanet ##altitude above the surface
-        rho = aeroModel.getDensity(altitude) ##air density
-        V = np.sqrt(velz**2+velx**2)
-        qinf = (np.pi/8.0)*rho*(D**2)*abs(V)
-        aeroF = -qinf*self.CD*np.asarray([velx,velz])
-        thrustF,mdot = propulsion(state)
+    def get_New_state(self, state, acc, angular_acc, mdot, d_angVofEngines, detach):
+        #input : [position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle], acc, angular_acc, engine angular V array, detach array 
+        #output : derivatives of position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle
     
+        new_position = np.add(state[0], state[1]*self.dt)
+        new_velocity = np.add(state[1], acc*self.dt)
+        new_rot_angle = np.add(state[2], state[3]*self.dt)
+        new_rot_angV = np.add(state[3], angular_acc*self.dt)
+        if state[5] >= int(detach):         #분리가 일어나지 않는 경우
+            new_stage = state[5]
+            new_feul = max(state[4]+ mdot*self.dt, 0)
+        elif state[5] == 2:                 #분리가 최대로 일어난 경우
+            new_stage = state[5]
+            new_fuel = max(state[4]+ mdot*self.dt, 0)
+        else:                               #분리가 일어나는 경우
+            new_stage = min[int(detach),2]
+            new_feul = self.fuel_mass[new_stage]
+        new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
+        return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle] 
+
     def check_crash(self, state):
         if self.task == 'hover':
             x, y = state['x'], state['y']
@@ -212,56 +244,31 @@ class Rocket(object):
         return reward
 
     def step(self, action):
-        stage = self.current_stage 
-        for act in action:
-        action
 
-        x, y, vx, vy = self.state['x'], self.state['y'], self.state['vx'], self.state['vy']
-        theta, vtheta = self.state['theta'], self.state['vtheta']
-        phi = self.state['phi']
+        stage = self.state[5]
 
-        f, vphi = self.action_table[action]
+        torque , thrust, mdot, d_ang_VofEngines = self.get_propulsion(action)
+        g_acc,r = self.get_gravity()
+        gravity = g_acc*self.mass[stage]
+        aeroF = self.get_aerofriction(r)
+        Forces = gravity + aeroF + thrust
 
-        ft, fr = -f*np.sin(phi), f*np.cos(phi)
-        fx = ft*np.cos(theta) - fr*np.sin(theta)
-        fy = ft*np.sin(theta) + fr*np.cos(theta)
+        vdot = Forces/self.mass[stage]
+        wdot = torque/self.I[stage]
 
-        rho = 1 / (125/(self.g/2.0))**0.5  # suppose after 125 m free fall, then air resistance = mg
-        ax, ay = fx-rho*vx, fy-self.g-rho*vy
-        atheta = ft*self.H/2 / self.I
-
-        # update agent
-        if self.already_landing:
-            vx, vy, ax, ay, theta, vtheta, atheta = 0, 0, 0, 0, 0, 0, 0
-            phi, f = 0, 0
-            action = 0
-
+        new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
+        
         self.step_id += 1
-        x_new = x + vx*self.dt + 0.5 * ax * (self.dt**2)
-        y_new = y + vy*self.dt + 0.5 * ay * (self.dt**2)
-        vx_new, vy_new = vx + ax * self.dt, vy + ay * self.dt
-        theta_new = theta + vtheta*self.dt + 0.5 * atheta * (self.dt**2)
-        vtheta_new = vtheta + atheta * self.dt
-        phi = phi + self.dt*vphi
-
-        phi = max(phi, -20/180*3.1415926)
-        phi = min(phi, 20/180*3.1415926)
-
-        self.state = {
-            'x': x_new, 'y': y_new, 'vx': vx_new, 'vy': vy_new,
-            'theta': theta_new, 'vtheta': vtheta_new,
-            'phi': phi, 'f': f,
-            't': self.step_id, 'action_': action
-        }
+        
         self.state_buffer.append(self.state)
+        state = new_state
 
-        self.already_landing = self.check_landing_success(self.state)
         self.already_crash = self.check_crash(self.state)
         reward = self.calculate_reward(self.state)
 
-        if self.already_crash or self.already_landing:
+        if self.already_crash or self.step_id==10000:
             done = True
         else:
             done = False
 
-        return self.flatten(self.state), reward, done, None
+        return self.state, reward, done, None
