@@ -55,7 +55,7 @@ def gravity(x,z):
         
     return np.asarray([accelx,accelz])
 
-def propulsion(t):   #=> 시간에 따른 함수가 아닌 state에 따른 함수로 변경해서 policy로 나타내보는 것
+def propulsion(state):   #=> 시간에 따른 함수가 아닌 state에 따른 함수로 변경해서 policy로 나타내보는 것
     global max_thrust,Isp,tMECO,ve
     ##Timing for thrusters
     if t < tMECO:
