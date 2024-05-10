@@ -254,19 +254,19 @@ class Rocket(object):
         Forces = gravity + aeroF + thrust
 
         vdot = Forces/self.mass[stage]
-        wdot = torque/self.I[stage]
+        wdot = torque/self.I[stage]                         # 각가속도 구하는 부분인데 잘못 구현함. 이 부분도 나중에 수정 필요
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
-        
+                                                            # timestep 지난 후 변경된 새 state return
         self.step_id += 1
         
-        self.state_buffer.append(self.state)
-        state = new_state
+        self.state_buffer.append(self.state)                # 기존 state buffer에 넣기
+        self.state = new_state                              # 새 state update 
 
         self.already_crash = self.check_crash(self.state)
         reward = self.calculate_reward(self.state)
 
-        if self.already_crash or self.step_id==10000:
+        if self.already_crash or self.step_id==10000:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
             done = True
         else:
             done = False
