@@ -17,17 +17,19 @@ class Rocket(object):
         self.G = 6.6742*10**-11;            #%%Gravitational constant (SI Unit)
         self.g = 9.8                        #지표에서의 중력가속도
         self.dt = 0.05                      # step의 시간간격
-        self.R_planet = 00000               # 지구반지름
+        self.R_planet = 6371                # 지구반지름 TODO: 단위가 km임
+
+        self.max_thrust = [6804, 934]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
         self.rocket_type = rocket_type
-        self.D = 10                                 # rocket diameter (meters)
-        self.H = [50,10,3]                          # rocket height (meters)
+        self.D = 3.7                                 # rocket diameter (meters)
+        self.H = [70,27.4,13.1]                          # rocket height (meters) 
         self.I = [[10000,1000,1000],
                  [1000,100,100],
-                 [100,10,10]]                       # stage별 3축의 Moment of inertia
-        self.mass=[10000, 2000, 100]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
-        self.fuel_mass=[7000,1800, 0]               # stage별 가용 연료 질량
+                 [100,10,10]]                       # stage별 3축의 Moment of inertia TODO: 관성 모멘트가 나와 있지 않음
+        self.mass=[549054, 2000, 22800]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
+        self.fuel_mass=[411000,1800, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
         self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
         self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
         
@@ -37,7 +39,7 @@ class Rocket(object):
                           [(1,0,0),(-1/2, np.cos(np.pi/6),0),(-1/2, -np.cos(np.pi/6),0)],
                           [(0,0,0)]]     
                                             # stage의 엔진의 로켓 중심으로부터의 위치
-        self.Isp = 300                      # 로켓 엔진의 specific Impulse
+        self.Isp = [297, 348]                   # 로켓 엔진의 specific Impulse TODO: 1단과 2단의 비추력값이 다름
 
         #rocket 현재 상황
         self.state = self.create_initial_state()

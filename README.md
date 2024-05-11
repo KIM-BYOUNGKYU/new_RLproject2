@@ -34,7 +34,10 @@ rocket.py :
 2. get_New_state에서 coordinate 변화를 고려하지 않음. 따라서 6DOF라는 모듈사용해서 coordinate 변화 계산하기 편하게 바꿀 거임.
 
 
-
+5.11 남윤호 작업
+rocket.py
+- 상수값 채우기
+- 부족한 부분: TODO 참조
 
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
