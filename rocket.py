@@ -101,10 +101,12 @@ class Rocket(object):
         vphi0 = 0  # Nozzle angular velocity
         vphi1 = 30 / 180 * np.pi
         vphi2 = -30 / 180 * np.pi
+        detach = 0 # 분리 버튼
 
         action_table = [[f0, vphi0], [f0, vphi1], [f0, vphi2],
                         [f1, vphi0], [f1, vphi1], [f1, vphi2],
-                        [f2, vphi0], [f2, vphi1], [f2, vphi2]
+                        [f2, vphi0], [f2, vphi1], [f2, vphi2],
+                        detach
                         ]
         return action_table
 
@@ -127,8 +129,10 @@ class Rocket(object):
     def create_initial_state(self):
         # predefined locations
         x0 = self.R_planet 
+        y0 = 0.0 
         z0 = 0.0
         velz0 = 0.0
+        vely = 0.0
         velx0 = 0.0
         theta = 0
         m = self.mass[0]
@@ -138,8 +142,33 @@ class Rocket(object):
             'phi': [0,0,0,0,0,0,0,0], 'f': [0,0,0,0,0,0,0,0],
             't': 0, 'a_': 0, 'mass':m
         }
+        # y좌표 넣은 수정된 state, 다른 계산 꼬일까봐 주석처리함
+        # state = {
+        #     'x': x0, 'y': y0, 'z': z0, 'vx': velx0, 'vy': vely0, 'vz': velz0,
+        #     'theta': theta, 'vtheta': 0,
+        #     'phi': [0,0,0,0,0,0,0,0], 'f': [0,0,0,0,0,0,0,0],
+        #     't': 0, 'a_': 0, 'mass':m
+        # }
         return state
     
+    def flatten(input_list) :
+        output_list = []
+        # 좌표, 속도, 회전 각도, 회전 각속도를 갖는 array의 요소를 순서대로 추가 (12개)
+        for i in range(4):
+            for element in input_list[i]:
+                output_list.append(element)
+
+        # 현재 연료 질량, stage 추가 (2개)
+        output_list.append(input_list[4])
+        output_list.append(input_list[5])
+
+        # 노즐 각도 추가 (16개)
+        for pair in input_list[6]:
+            for element in pair:
+                output_list.append(element)
+
+        return output_list
+
     def get_gravity(self):
         global Rplanet,mplanet
         x, y, z = self.state[0:3]    
