@@ -1,10 +1,38 @@
 import numpy as np
 import random
 import cv2
-import utils
 from aerodynamics import Aerodynamics as aeroModel
 import policy
 
+def rotation_matrix(roll, pitch, yaw):
+    roll = np.radians(roll)
+    pitch = np.radians(pitch)
+    yaw = np.radians(yaw)
+    
+    # Roll에 대한 회전 행렬
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(roll), -np.sin(roll)],
+                    [0, np.sin(roll), np.cos(roll)]])
+    
+    # Pitch에 대한 회전 행렬
+    R_y = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                    [0, 1, 0],
+                    [-np.sin(pitch), 0, np.cos(pitch)]])
+    
+    # Yaw에 대한 회전 행렬
+    R_z = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                    [np.sin(yaw), np.cos(yaw), 0],
+                    [0, 0, 1]])
+    
+    # 회전 행렬 결합
+    R = np.dot(R_z, np.dot(R_y, R_x))
+    
+    return R
+
+def transform_coordinates(coordinates, roll, pitch, yaw):
+    R = rotation_matrix(roll, pitch, yaw)
+    transformed_coordinates = np.dot(R, coordinates)
+    return transformed_coordinates
 
 class Rocket(object):
     def __init__(self, max_steps, task='launching', rocket_type='falcon-4',
@@ -46,6 +74,7 @@ class Rocket(object):
         self.step_id = 0
         self.state_buffer = []
         self.already_crash = False
+
         self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
         self.action_table = self.create_action_table()
         self.state_dims = len(self.state)
@@ -65,7 +94,7 @@ class Rocket(object):
         cv2.destroyAllWindows()
         return self.state
 
-    def create_action_table(self):
+    def create_action_table(self): # unused
         f0 = 0.2 * self.g  # thrust
         f1 = 1.0 * self.g
         f2 = 2 * self.g
@@ -129,7 +158,7 @@ class Rocket(object):
     
     def get_propulsion(self, action):
         #input: action
-        #output: total_torque, total_thrust, mdot, 엔진 노즐의 angular velocity pair
+        #output: total_torque;nparray, total_thrust;nparray, mdot, 엔진 노즐의 angular velocity pair
         stage = self.state[5]   #state의 5번째 값은 current_Stage에 해당됨.
         
         NumofUsedEngines= sum(self.num_engines[0:stage]) 
@@ -144,9 +173,9 @@ class Rocket(object):
             mdot = 0
         else:
             for i in range(len(thrusts)):
-                x_thrust = thrusts[i]*np.sin(angle_thrusts[i][1])*np.cos(angle_thrusts[i][0])
-                y_thrust = thrusts[i]*np.sin(angle_thrusts[i][1])*np.sin(angle_thrusts[i][0])
-                z_thrust = -thrusts[i]*np.cos(angle_thrusts[i][1])
+                x_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
+                y_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
+                z_thrust = thrusts[i]*np.cos(angle_thrusts[i][0])
                 thrust = np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
 
                 total_thrust += thrust                              # thrust vector의 합                            
@@ -162,11 +191,18 @@ class Rocket(object):
     def get_New_state(self, state, acc, angular_acc, mdot, d_angVofEngines, detach):
         #input : [position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle], acc, angular_acc, engine angular V array, detach array 
         #output : derivatives of position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle
-    
+        #유의점 : input의 position, velocity, rotational angle, angular velocity는 지구 좌표계 기준,
+        #                engine angle, acc, angular_acc는 로켓 좌표계 기준으로 설정
         new_position = np.add(state[0], state[1]*self.dt)
-        new_velocity = np.add(state[1], acc*self.dt)
+
+        acc_Earth = transform_coordinates(acc,state[2][0],state[2][1],state[2][2])
+        new_velocity = np.add(state[1], acc_Earth*self.dt)
+
         new_rot_angle = np.add(state[2], state[3]*self.dt)
-        new_rot_angV = np.add(state[3], angular_acc*self.dt)
+
+        angular_acc_Earth = transform_coordinates(angular_acc,state[2][0],state[2][1],state[2][2])
+        new_rot_angV = np.add(state[3], angular_acc_Earth*self.dt)
+
         if state[5] >= int(detach):         #분리가 일어나지 않는 경우
             new_stage = state[5]
             new_feul = max(state[4]+ mdot*self.dt, 0)
@@ -176,7 +212,9 @@ class Rocket(object):
         else:                               #분리가 일어나는 경우
             new_stage = min[int(detach),2]
             new_feul = self.fuel_mass[new_stage]
+
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
+
         return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle] 
 
     def check_crash(self, state):
@@ -256,7 +294,7 @@ class Rocket(object):
         Forces = gravity + aeroF + thrust
 
         vdot = Forces/self.mass[stage]
-        wdot = torque/self.I[stage]                         # 각가속도 구하는 부분인데 잘못 구현함. 이 부분도 나중에 수정 필요
+        wdot = np.divide(torque,self.I[stage])              
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
                                                             # timestep 지난 후 변경된 새 state return
@@ -274,3 +312,6 @@ class Rocket(object):
             done = False
 
         return self.state, reward, done, None
+
+    def show_path(self):
+        if state[]
