@@ -8,6 +8,7 @@
 - 3개의 엔진 축방향 각속도 (-30,0,30)
 - 3개의 엔진 추력(min~max) => continuous action space
 - 1개의 분리(버튼)  값이 1이상이면 1단분리, 값이 2이상이면 2단 분리
+=> 시간이나 현재 연료 잔량에 따라 분리되도록 설정
 => 총 25개의 값을 list로 return
 
 
@@ -57,6 +58,7 @@ rocket.py
 이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임. 
 
 * 기본적인 변수들을 실제값으로 변경.
+* 그래프 그리는 method 만들고 실제 동작 확인.
 * calculate_reward 부분 구현.
 * policy.py 검토 및 전체적인 RL 구성하기
 * visualization: 제대로 학습 되었는지 확인하는 부분 첨가
