@@ -54,10 +54,10 @@ rocket.py
 (구현 필요해 보이는 부분 추가하기, 완료했으면 취소선으로 변경)
 
 
-~~ * flatten 함수 구현 : line45
+ * flatten 함수 구현 : line45 
 
 
-7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수 ~~
+ 7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수 
 
 
 이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임. 
