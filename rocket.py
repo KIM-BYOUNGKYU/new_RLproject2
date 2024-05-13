@@ -152,27 +152,13 @@ class Rocket(object):
 
     def create_initial_state(self):
         # predefined locations
-        x0 = self.R_planet 
-        y0 = 0.0 
-        z0 = 0.0
-        velz0 = 0.0
-        vely = 0.0
-        velx0 = 0.0
-        theta = 0
-        m = self.mass[0]
-        state = {
-            'x': x0, 'z': z0, 'vx': velx0, 'vz': velz0,
-            'theta': theta, 'vtheta': 0,
-            'phi': [0,0,0,0,0,0,0,0], 'f': [0,0,0,0,0,0,0,0],
-            't': 0, 'a_': 0, 'mass':m
-        }
-        # y좌표 넣은 수정된 state, 다른 계산 꼬일까봐 주석처리함
-        # state = {
-        #     'x': x0, 'y': y0, 'z': z0, 'vx': velx0, 'vy': vely0, 'vz': velz0,
-        #     'theta': theta, 'vtheta': 0,
-        #     'phi': [0,0,0,0,0,0,0,0], 'f': [0,0,0,0,0,0,0,0],
-        #     't': 0, 'a_': 0, 'mass':m
-        # }
+        position = np.array([0.0, 0.0, self.R_planet])
+        velocity = np.array([0.0, 0.0, 0.0])
+        angle = np.array([0.0, 0.0, 0.0])
+        angular_v= np.array([0.0, 0.0, 0.0])
+        state = [
+            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2))
+        ]
         return state
     
     def flatten(input_list) :
