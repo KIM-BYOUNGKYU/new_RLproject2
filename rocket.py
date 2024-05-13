@@ -3,9 +3,6 @@ import random
 import cv2
 from aerodynamics import Aerodynamics as aeroModel
 import policy
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation
 
 def rotation_matrix(roll, pitch, yaw):
     roll = np.radians(roll)
@@ -37,28 +34,8 @@ def transform_coordinates(coordinates, roll, pitch, yaw):
     transformed_coordinates = np.dot(R, coordinates)
     return transformed_coordinates
 
-def calculate_air_density(altitude):
-    # 기본 상수
-    R = 287.05  # 이상기체 상수, J/(kg·K)
-    g = 9.80665  # 중력 가속도, m/s²
-    T0 = 288.15  # 해수면 기준 온도, K
-    P0 = 101325  # 해수면 기준 압력, Pa
-    L = 0.0065   # 기온 감소율, K/m
-    M = 0.0289644  # 건조 공기의 몰 질량, kg/mol
-
-    # 고도에 따른 온도
-    T = T0 - L * altitude
-    
-    # 고도에 따른 압력
-    P = P0 * (1 - L * altitude / T0) ** (g * M / (R * L))
-
-    # 공기 밀도
-    density = P / (R * T)
-    
-    return density
-
 class Rocket(object):
-    def __init__(self, max_steps=10000, task='launching', rocket_type='falcon-4',
+    def __init__(self, max_steps, task='launching', rocket_type='falcon-4',
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
@@ -67,25 +44,23 @@ class Rocket(object):
         #기본적인 환경 configuration
         self.G = 6.6742*10**-11;            #%%Gravitational constant (SI Unit)
         self.g = 9.8                        #지표에서의 중력가속도
-        self.dt = 0.25                      # step의 시간간격
-        self.max_step= max_steps
-        self.R_planet = 6371000                # 지구반지름 TODO: 단위가 m임
-        self.M_planet = 5.972*(10**(24))
-        self.max_thrust = [6804000, 934000,0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
+        self.dt = 0.05                      # step의 시간간격
+        self.R_planet = 6371                # 지구반지름 TODO: 단위가 km임
+
+        self.max_thrust = [6804, 934]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
         self.rocket_type = rocket_type
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
-        self.I = [[1000,1000,1000000],
-                 [100,100,1000],
-                 [10,10,100]]                       # stage별 3축의 Moment of inertia TODO: 관성 모멘트가 나와 있지 않음
+        self.I = [[10000,1000,1000],
+                 [1000,100,100],
+                 [100,10,10]]                       # stage별 3축의 Moment of inertia TODO: 관성 모멘트가 나와 있지 않음
         self.mass=[549054, 2000, 22800]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
-        self.fuel_mass=[411000, 1800, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
+        self.fuel_mass=[411000,1800, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
         self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
         self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
-        self.current_mass = self.mass[0]
-    
+        
         #rocket engine configuration
         self.num_engines = [5,3,1]           # stage별 engine의 개수
         self.r_engines = [[(1,0,0),(0,1,0),(-1,0,0),(0,-1,0),(0,0,0)], 
@@ -100,11 +75,12 @@ class Rocket(object):
         self.state_buffer = []
         self.already_crash = False
 
-        #self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
-        #self.action_table = self.create_action_table()
+        self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
+        self.action_table = self.create_action_table()
         self.state_dims = len(self.state)
-        #self.action_dims = len(self.action_table)
+        self.action_dims = len(self.action_table)
         
+
     def reset(self, state_dict=None):
 
         if state_dict is None:
@@ -138,11 +114,11 @@ class Rocket(object):
 
         stage = self.state[5]
         velocity = self.state[1]
-        altitude = distance - self.R_planet ##altitude above the surface
-        rho = calculate_air_density(altitude) ##air density
+        altitude = distance - Rplanet ##altitude above the surface
+        rho = aeroModel.getDensity(altitude) ##air density
         V = np.sqrt(velocity.dot(velocity))
         qinf = (np.pi/8.0)*rho*(self.D**2)*abs(V)
-        aeroF = -qinf*self.CD[self.state[5]]*velocity
+        aeroF = -qinf*self.CD*velocity
         return aeroF
 
     def get_random_action(self):
@@ -150,27 +126,33 @@ class Rocket(object):
 
     def create_initial_state(self):
         # predefined locations
-        position = np.array([0.0, 0.0, self.R_planet])
-        velocity = np.array([0.0, 0.0, 0.0])
-        angle = np.array([0.0, 0.0, 0.0])
-        angular_v= np.array([0.0, 0.0, 0.0])
-        state = [
-            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2))
-        ]
+        x0 = self.R_planet 
+        z0 = 0.0
+        velz0 = 0.0
+        velx0 = 0.0
+        theta = 0
+        m = self.mass[0]
+        state = {
+            'x': x0, 'z': z0, 'vx': velx0, 'vz': velz0,
+            'theta': theta, 'vtheta': 0,
+            'phi': [0,0,0,0,0,0,0,0], 'f': [0,0,0,0,0,0,0,0],
+            't': 0, 'a_': 0, 'mass':m
+        }
         return state
     
     def get_gravity(self):
-        x, y, z = self.state[0]
+        global Rplanet,mplanet
+        x, y, z = self.state[0:3]    
         r = np.sqrt(x**2 + y**2 + z**2)
     
-        if r < self.R_planet:
+        if r < Rplanet:
             accelx = 0.0
             accely = 0.0
             accelz = 0.0
         else:
-            accelx = -self.G*self.M_planet/(r**3)*x
-            accely = -self.G*self.M_planet/(r**3)*y
-            accelz = -self.G*self.M_planet/(r**3)*z
+            accelx = -self.G*mplanet/(r**3)*x
+            accely = -self.G*mplanet/(r**3)*y
+            accelz = -self.G*mplanet/(r**3)*z
         
         return np.asarray([accelx,accely,accelz]),r
     
@@ -184,20 +166,21 @@ class Rocket(object):
         
         thrusts = action[NumofUsedEngines*3 + current_NumofEngines*2:NumofUsedEngines*3 + current_NumofEngines*3]
         angle_thrusts = self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines]
-        total_thrust = np.array([0.0,0.0,0.0])
-        total_torque = np.array([0.0,0.0,0.0])
-        mdot = 0
-        if self.state[4] > 0: #연료가 있는 경우
+        
+        if self.state[4] <= 0: #연료가 없는 경우
+            total_torque = np.array([0,0,0])
+            total_thrust = np.array([0,0,0])
+            mdot = 0
+        else:
             for i in range(len(thrusts)):
                 x_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
                 y_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
                 z_thrust = thrusts[i]*np.cos(angle_thrusts[i][0])
                 thrust = np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
 
-                total_thrust +=thrust                            # thrust vector의 합                            
-                total_torque +=np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)
-            if self.state[5] != 2: # final stage가 아닌 경우
-                mdot -= sum(thrusts) / (self.g * self.Isp[self.state[5]])# thrust에 따른 연료소모속도
+                total_thrust += thrust                              # thrust vector의 합                            
+                total_torque += np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)        
+            mdot = - sum(thrusts) / (self.g * self.Isp)             # thrust에 따른 연료소모속도
         
         angular_velocity0 = action[0:self.num_engines[0]] + action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]]
         angular_velocity1 = action[self.num_engines[0]:self.num_engines[0]*2] + action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2]
@@ -222,16 +205,13 @@ class Rocket(object):
 
         if state[5] >= int(detach):         #분리가 일어나지 않는 경우
             new_stage = state[5]
-            new_fuel = max(state[4]+ mdot*self.dt, 0)
-            self.current_mass += new_fuel-state[5]
+            new_feul = max(state[4]+ mdot*self.dt, 0)
         elif state[5] == 2:                 #분리가 최대로 일어난 경우
             new_stage = state[5]
             new_fuel = max(state[4]+ mdot*self.dt, 0)
-            self.current_mass += new_fuel-state[5]
         else:                               #분리가 일어나는 경우
             new_stage = min[int(detach),2]
-            new_fuel = self.fuel_mass[new_stage]
-            self.current_mass = self.mass[new_stage]
+            new_feul = self.fuel_mass[new_stage]
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
 
@@ -309,11 +289,11 @@ class Rocket(object):
 
         torque , thrust, mdot, d_ang_VofEngines = self.get_propulsion(action)
         g_acc,r = self.get_gravity()
-        gravity = g_acc*self.current_mass
+        gravity = g_acc*self.mass[stage]
         aeroF = self.get_aerofriction(r)
         Forces = gravity + aeroF + thrust
 
-        vdot = Forces/self.current_mass
+        vdot = Forces/self.mass[stage]
         wdot = np.divide(torque,self.I[stage])              
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
@@ -324,64 +304,14 @@ class Rocket(object):
         self.state = new_state                              # 새 state update 
 
         self.already_crash = self.check_crash(self.state)
-        #reward = self.calculate_reward(self.state)
-        reward = 0
-        if self.already_crash or self.step_id==self.max_step:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
+        reward = self.calculate_reward(self.state)
+
+        if self.already_crash or self.step_id==10000:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
             done = True
         else:
             done = False
 
         return self.state, reward, done, None
 
-    def show_path_from_state_buffer(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        u = np.linspace(0, 2 * np.pi, 100)
-        v = np.linspace(0, np.pi, 100)
-        x = self.R_planet * np.outer(np.cos(u), np.sin(v))
-        y = self.R_planet * np.outer(np.sin(u), np.sin(v))
-        z = self.R_planet * np.outer(np.ones(np.size(u)), np.cos(v))
-    
-        # 지구 표면 플롯
-        #ax.plot_surface(x, y, z, color='b', alpha=0.3)
-
-        # 스테이지별 색상 맵을 정의
-        color_map = ['g', 'r', 'orange']
-
-        # 각 상태 리스트에서 인덱스 0, 1, 2가 각각 x, y, z 좌표라고 가정
-        stages = set(state[5] for state in self.state_buffer)  # 모든 스테이지 번호를 추출
-        for stage in stages:
-            # 해당 스테이지의 모든 상태를 추출
-            stage_positions = np.array([state[0] for state in self.state_buffer if state[5] == stage])
-            ax.plot(stage_positions[:, 0], stage_positions[:, 1], stage_positions[:, 2], label=f'Stage {stage}', color=color_map[stage % len(color_map)])
-
-        ax.set_xlabel('X position')
-        ax.set_ylabel('Y position')
-        ax.set_zlabel('Z position')
-        ax.legend()
-        plt.show()
-
-    
-
-    def animate_trajectory(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        
-        data = np.array([state[0] for state in self.state_buffer]).T
-        line, = ax.plot(data[0, 0:1], data[1, 0:1], data[2, 0:1], 'r-')
-
-        ax.set_xlim([np.min(data[0])-1000, np.max(data[0])+1000])
-        ax.set_ylim([np.min(data[1])-1000, np.max(data[1])+1000])
-        ax.set_zlim([np.min(data[2])-1000, np.max(data[2])+1000])
-        ax.set_xlabel('X position')
-        ax.set_ylabel('Y position')
-        ax.set_zlabel('Z position')
-
-        ani = FuncAnimation(fig, update, frames=len(self.state_buffer), fargs=(data, line), interval=0)
-        plt.show()
-
-def update(num, data, line, skip_steps=500):
-    end = min(num * skip_steps + 1, data.shape[1])
-    line.set_data(data[:2, :end])
-    line.set_3d_properties(data[2, :end])
+    def show_path(self):
+        if state[]
