@@ -40,6 +40,11 @@ rocket.py
 - 상수값 채우기
 - 부족한 부분: TODO 참조
 
+5.13 남민영 작업
+rocket.py
+- flatten 함수 제작, create_initial_state 수정
+- 부족한 부분: 수정된 create_initial_state에 맞춰 get_new_state 수정 필요(y축 도입)
+
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
 
@@ -49,10 +54,10 @@ rocket.py
 (구현 필요해 보이는 부분 추가하기, 완료했으면 취소선으로 변경)
 
 
-* flatten 함수 구현 : line45
+ * flatten 함수 구현 : line45 
 
 
-7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수
+ 7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수 
 
 
 이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임. 
@@ -62,4 +67,5 @@ rocket.py
 * calculate_reward 부분 구현.
 * policy.py 검토 및 전체적인 RL 구성하기
 * visualization: 제대로 학습 되었는지 확인하는 부분 첨가
+* get_new_state: y좌표 계산 필요
 
