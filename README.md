@@ -45,6 +45,13 @@ rocket.py
 - flatten 함수 제작, create_initial_state 수정
 - 부족한 부분: 수정된 create_initial_state에 맞춰 get_new_state 수정 필요(y축 도입)
 
+5.14 김병규 작업
+rocket.py
+- dynamics 검토 후 최고속도 O km/s 으로 나타나는 것 확인 => stage 분리작업도 추후 확인 예정
+- animation 변경
+test_rocket.py
+- rocket 변경 후 세부사항 수정
+
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
 
@@ -54,13 +61,13 @@ rocket.py
 (구현 필요해 보이는 부분 추가하기, 완료했으면 취소선으로 변경)
 
 
- * flatten 함수 구현 : line45 
+ ~* flatten 함수 구현 : line45 
 
 
  7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수 
 
 
-이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임. 
+이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임.~
 
 * 기본적인 변수들을 실제값으로 변경.
 * 그래프 그리는 method 만들고 실제 동작 확인.
