@@ -52,6 +52,12 @@ rocket.py
 test_rocket.py
 - rocket 변경 후 세부사항 수정
 
+5.18 남윤호 작업
+rocket.py
+- rocket.mass 수정, 관성모멘트 공식 도입
+- TODO: mass에 따라 관성모멘트가 달라지는 부분도 step에 넣어야 할 듯
+- 월요일 수업 전까지 policy.py 검토 예정
+
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
 
