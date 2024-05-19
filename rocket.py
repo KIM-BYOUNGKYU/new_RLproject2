@@ -5,6 +5,7 @@ from aerodynamics import Aerodynamics as aeroModel
 import policy
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
 
 def rotation_matrix(roll, pitch, yaw):
     roll = np.radians(roll)
@@ -310,5 +311,59 @@ class Rocket(object):
 
         return self.state, reward, done, None
 
-    def show_path(self):
-        if state[]
+
+    def show_path_from_state_buffer(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        u = np.linspace(0, 2 * np.pi, 100)
+        v = np.linspace(0, np.pi, 100)
+        x = self.R_planet * np.outer(np.cos(u), np.sin(v))
+        y = self.R_planet * np.outer(np.sin(u), np.sin(v))
+        z = self.R_planet * np.outer(np.ones(np.size(u)), np.cos(v))
+    
+        # 지구 표면 플롯
+        #ax.plot_surface(x, y, z, color='b', alpha=0.3)
+
+        # 스테이지별 색상 맵을 정의
+        color_map = ['g', 'r', 'orange']
+
+        # 각 상태 리스트에서 인덱스 0, 1, 2가 각각 x, y, z 좌표라고 가정
+        stages = set(state[5] for state in self.state_buffer)  # 모든 스테이지 번호를 추출
+        for stage in stages:
+            # 해당 스테이지의 모든 상태를 추출
+            stage_positions = np.array([state[0] for state in self.state_buffer if state[5] == stage])
+            ax.plot(stage_positions[:, 0], stage_positions[:, 1], stage_positions[:, 2], label=f'Stage {stage}', color=color_map[stage % len(color_map)])
+
+        ax.set_xlabel('X position')
+        ax.set_ylabel('Y position')
+        ax.set_zlabel('Z position')
+        ax.legend()
+        plt.show()
+
+    
+
+    def animate_trajectory(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        
+        data = np.array([state[0] for state in self.state_buffer]).T
+        line, = ax.plot(data[0, 0:1], data[1, 0:1], data[2, 0:1], 'r-')
+
+        ax.set_xlim([np.min(data[0])-1000, np.max(data[0])+1000])
+        ax.set_ylim([np.min(data[1])-1000, np.max(data[1])+1000])
+        ax.set_zlim([np.min(data[2])-1000, np.max(data[2])+1000])
+        ax.set_xlabel('X position')
+        ax.set_ylabel('Y position')
+        ax.set_zlabel('Z position')
+
+        # ani = FuncAnimation(fig, update, frames=len(self.state_buffer), fargs=(data, line), interval=0)
+        plt.show()
+
+    def update(num, data, line, skip_steps=500):
+        end = min(num * skip_steps + 1, data.shape[1])
+        line.set_data(data[:2, :end])
+        line.set_3d_properties(data[2, :end])
+
+    # def show_path(self):
+    #     if state[]

@@ -2,8 +2,12 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def calculate_returns(next_value, rewards, masks, gamma=0.99):
+    # 에피소드 끝: mask = 0 / 에피소드 진행중: mask = 1
     R = next_value
     returns = []
     for step in reversed(range(len(rewards))):
@@ -78,6 +82,7 @@ class ActorCritic(nn.Module):
     """
 
     def __init__(self, input_dim, output_dim):
+        # input_dim: state size / output_dim: action size
         super().__init__()
 
         self.output_dim = output_dim
@@ -90,16 +95,17 @@ class ActorCritic(nn.Module):
     def forward(self, x):
         # shape x: batch_size x m_token x m_state
         y = self.actor(x)
-        probs = self.softmax(y)
+        probs = self.softmax(y) # 각 행동에 대한 확률 분포
         value = self.critic(x)
 
         return probs, value
 
     def get_action(self, state, deterministic=False, exploration=0.01):
 
-        state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
+        state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device) # state를 PyTorch 텐서로 변환 후 device로 이동
         probs, value = self.forward(state)
-        probs = probs[0, :]
+        # 첫번째 배치 차원 제거, 1차원 텐서로 변경
+        probs = probs[0, :] 
         value = value[0]
 
         if deterministic:
@@ -107,7 +113,7 @@ class ActorCritic(nn.Module):
         else:
             if random.random() < exploration:  # exploration
                 action_id = random.randint(0, self.output_dim - 1)
-            else:
+            else: # 확률 분포에 따라 선택
                 action_id = np.random.choice(self.output_dim, p=np.squeeze(probs.detach().cpu().numpy()))
 
         log_prob = torch.log(probs[action_id] + 1e-9)

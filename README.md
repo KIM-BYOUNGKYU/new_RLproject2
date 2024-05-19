@@ -62,7 +62,12 @@ rocket.py
 rocket.py
 - calculate_reward 함수 마무리, check_crash 함수 수정
 - TODO: target_p (목표 궤도) 설정
-- 월요일 수업 전까지 policy.py ActorCritic class 코드 수정 예정
+policy.py
+- 함수 검토 중(월요일 수업 전까지 완료 예정)
+- ActorCritic 참고 자료: https://wikidocs.net/172977
+test_train.py 생성
+
+
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
 
