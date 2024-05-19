@@ -67,6 +67,10 @@ policy.py
 - ActorCritic 참고 자료: https://wikidocs.net/172977
 test_train.py 생성
 
+5.20 남윤호 작업
+policy.py
+- 함수 검토 완료
+- 변수들의 파라미터화를 통해 테스트를 조금 더 쉽도록 함
 
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 

@@ -12,7 +12,8 @@ def calculate_returns(next_value, rewards, masks, gamma=0.99):
     returns = []
     for step in reversed(range(len(rewards))):
         R = rewards[step] + gamma * R * masks[step]
-        returns.insert(0, R)
+        returns.append(R)
+    returns.reverse() # reverse를 뒤에서 하도록 수정
     return returns
 
 
@@ -38,7 +39,7 @@ class PositionalMapping(nn.Module):
             return x
 
         h = [x]
-        PI = 3.1415927410125732
+        PI = 3.141592653589793
         for i in range(self.L):
             x_sin = torch.sin(2**i * PI * x)
             x_cos = torch.cos(2**i * PI * x)
@@ -53,12 +54,11 @@ class MLP(nn.Module):
     Multilayer perception with an embedded positional mapping
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, h_dim=128, L=7, scale=1.0):
         super().__init__()
 
-        self.mapping = PositionalMapping(input_dim=input_dim, L=7)
+        self.mapping = PositionalMapping(input_dim=input_dim, L=L, scale=scale)
 
-        h_dim = 128
         self.linear1 = nn.Linear(in_features=self.mapping.output_dim, out_features=h_dim, bias=True)
         self.linear2 = nn.Linear(in_features=h_dim, out_features=h_dim, bias=True)
         self.linear3 = nn.Linear(in_features=h_dim, out_features=h_dim, bias=True)
@@ -81,16 +81,16 @@ class ActorCritic(nn.Module):
     RL policy and update rules
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, h_dim=128, L=7, scale=1.0, lr=5e-5):
         # input_dim: state size / output_dim: action size
         super().__init__()
 
         self.output_dim = output_dim
-        self.actor = MLP(input_dim=input_dim, output_dim=output_dim)
-        self.critic = MLP(input_dim=input_dim, output_dim=1)
+        self.actor = MLP(input_dim=input_dim, output_dim=output_dim, h_dim=h_dim, L=L, scale=scale)
+        self.critic = MLP(input_dim=input_dim, output_dim=1, h_dim=h_dim, L=L, scale=scale)
         self.softmax = nn.Softmax(dim=-1)
 
-        self.optimizer = optim.RMSprop(self.parameters(), lr=5e-5)
+        self.optimizer = optim.RMSprop(self.parameters(), lr=lr)
 
     def forward(self, x):
         # shape x: batch_size x m_token x m_state
