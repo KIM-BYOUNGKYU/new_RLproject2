@@ -58,6 +58,11 @@ rocket.py
 - TODO: mass에 따라 관성모멘트가 달라지는 부분도 step에 넣어야 할 듯
 - 월요일 수업 전까지 policy.py 검토 예정
 
+5.19 남민영 작업
+rocket.py
+- calculate_reward 함수 마무리, check_crash 함수 수정
+- TODO: target_p (목표 궤도) 설정
+- 월요일 수업 전까지 policy.py ActorCritic class 코드 수정 예정
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 
 

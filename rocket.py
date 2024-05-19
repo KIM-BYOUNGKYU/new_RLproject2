@@ -41,6 +41,7 @@ class Rocket(object):
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
+        self.target_p = [0,0,0] # target이 되는 궤도(path)
         
 
         #기본적인 환경 configuration
@@ -251,9 +252,9 @@ class Rocket(object):
 
         return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle] 
 
-    def check_crash(self, state):
-        if self.task == 'hover':
-            x, y = state['x'], state['y']
+    def check_crash(self, state): 
+        if self.task == 'launching': 
+            x, y, z = state['x'], state['y'], state['z']
             theta = state['theta']
             crash = False
             if y <= self.H / 2.0:
@@ -262,58 +263,20 @@ class Rocket(object):
                 crash = True
             return crash
 
-        elif self.task == 'landing':
-            x, y = state['x'], state['y']
-            vx, vy = state['vx'], state['vy']
-            theta = state['theta']
-            vtheta = state['vtheta']
-            v = (vx**2 + vy**2)**0.5
-
-            crash = False
-            if y >= self.world_y_max - self.H / 2.0:
-                crash = True
-            if y <= 0 + self.H / 2.0 and v >= 15.0:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(x) >= self.target_r:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(theta) >= 10/180*np.pi:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(vtheta) >= 10/180*np.pi:
-                crash = True
-            return crash
-
     def calculate_reward(self, state):
-
-        x_range = self.world_x_max - self.world_x_min
-        y_range = self.world_y_max - self.world_y_min
 
         # dist between agent and target point
         dist_x = abs(state['x'] - self.target_x)
         dist_y = abs(state['y'] - self.target_y)
-        dist_norm = dist_x / x_range + dist_y / y_range
+        dist_z = abs(state['z'] - self.target_z)
 
-        dist_reward = 0.1*(1.0 - dist_norm)
-
-        if abs(state['theta']) <= np.pi / 6.0:
-            pose_reward = 0.1
-        else:
-            pose_reward = abs(state['theta']) / (0.5*np.pi)
-            pose_reward = 0.1 * (1.0 - pose_reward)
-
-        reward = dist_reward + pose_reward
-
-        if self.task == 'hover' and (dist_x**2 + dist_y**2)**0.5 <= 2*self.target_r:  # hit target
+        px, py, pz = self.target_p
+        if self.task == 'launching' and (dist_x**2 + dist_y**2 + dist_z**2)**0.5 <= 2 * (px**2 + py**2 + pz**2)**0.5:  # hit target
             reward = 0.25
-        if self.task == 'hover' and (dist_x**2 + dist_y**2)**0.5 <= 1*self.target_r:  # hit target
+        if self.task == 'launching' and (dist_x**2 + dist_y**2 + dist_z**2)**0.5 <= 1 * (px**2 + py**2 + pz**2)**0.5:  # hit target
             reward = 0.5
-        if self.task == 'hover' and abs(state['theta']) > 90 / 180 * np.pi:
+        if self.task == 'launching' and abs(state['theta']) > 90 / 180 * np.pi:
             reward = 0
-
-        v = (state['vx'] ** 2 + state['vy'] ** 2) ** 0.5
-        if self.task == 'landing' and self.already_crash:
-            reward = (reward + 5*np.exp(-1*v/10.)) * (self.max_steps - self.step_id)
-        if self.task == 'landing' and self.already_landing:
-            reward = (1.0 + 5*np.exp(-1*v/10.))*(self.max_steps - self.step_id)
 
         return reward
 
