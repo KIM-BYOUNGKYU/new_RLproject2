@@ -81,13 +81,13 @@ class ActorCritic(nn.Module):
     RL policy and update rules
     """
 
-    def __init__(self, input_dim, output_dim, h_dim=128, L=7, scale=1.0, lr=5e-5):
+    def __init__(self, state_size, action_size, h_dim=128, L=7, scale=1.0, lr=5e-5):
         # input_dim: state size / output_dim: action size
         super().__init__()
 
-        self.output_dim = output_dim
-        self.actor = MLP(input_dim=input_dim, output_dim=output_dim, h_dim=h_dim, L=L, scale=scale)
-        self.critic = MLP(input_dim=input_dim, output_dim=1, h_dim=h_dim, L=L, scale=scale)
+        self.action_size = action_size
+        self.actor = MLP(input_dim=state_size, output_dim=action_size, h_dim=h_dim, L=L, scale=scale)
+        self.critic = MLP(input_dim=state_size, output_dim=1, h_dim=h_dim, L=L, scale=scale)
         self.softmax = nn.Softmax(dim=-1)
 
         self.optimizer = optim.RMSprop(self.parameters(), lr=lr)
@@ -112,9 +112,9 @@ class ActorCritic(nn.Module):
             action_id = np.argmax(np.squeeze(probs.detach().cpu().numpy()))
         else:
             if random.random() < exploration:  # exploration
-                action_id = random.randint(0, self.output_dim - 1)
+                action_id = random.randint(0, self.action_size - 1)
             else: # 확률 분포에 따라 선택
-                action_id = np.random.choice(self.output_dim, p=np.squeeze(probs.detach().cpu().numpy()))
+                action_id = np.random.choice(self.action_size, p=np.squeeze(probs.detach().cpu().numpy()))
 
         log_prob = torch.log(probs[action_id] + 1e-9)
 
@@ -136,5 +136,5 @@ class ActorCritic(nn.Module):
         ac_loss = actor_loss + critic_loss
 
         network.optimizer.zero_grad()
-        ac_loss.backward()
+        ac_loss.backward() # backpropagation
         network.optimizer.step()
