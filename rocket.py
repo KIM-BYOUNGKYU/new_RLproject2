@@ -60,9 +60,7 @@ class Rocket(object):
         self.rocket_type = rocket_type
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
-        self.I = [[1000,1000,1000000],              # 전제 조건: 관성 텐서의 비대각성분은 0이라고 가정
-                 [100,100,1000],
-                 [10,10,100]]                       # stage별 3축의 Moment of inertia TODO: 관성 모멘트가 나와 있지 않음
+
         self.mass=[549054, 2000, 22800]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
         self.fuel_mass=[411000, 1800, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
         
@@ -79,8 +77,7 @@ class Rocket(object):
 
         #rocket 현재 상황
         self.state = self.create_initial_state()
-        
-        self.current_mass = self.mass[0]
+        self.current_mass = self.state[4]
         self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12, 
                   0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12,
                   0.5 * self.current_mass * (self.D ** 2)]                     # stage별 3축의 Moment of inertia, X축과 Y축의 관성 모멘트가 같다고 가정 TODO: mass와 관성 모멘트를 계속 업데이트 해줘야 함
@@ -290,7 +287,7 @@ class Rocket(object):
         
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
         
-        wdot = torque /self.I[stage]                
+        wdot = torque /self.I               
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
                                                             # timestep 지난 후 변경된 새 state return
