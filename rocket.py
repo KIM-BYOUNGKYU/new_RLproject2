@@ -2,13 +2,15 @@ import numpy as np
 import random
 import cv2
 from aerodynamics import Aerodynamics as aeroModel
-import policy
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from ambiance import Atmosphere
+import gymnasium as gym
+from gymnasium import spaces
+
 
 def rotation_matrix(roll, pitch, yaw):
     roll = np.radians(roll)
@@ -41,11 +43,10 @@ def transform_coordinates(coordinates, roll, pitch, yaw):
     return transformed_coordinates
 
 class Rocket(object):
-    def __init__(self, max_steps=10000, task='launching', rocket_type='falcon-4',
+    def __init__(self, max_steps=100000, task='launching', rocket_type='falcon-4',
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
-        
 
         #기본적인 환경 configuration
         self.G = 6.6742*10**-11;            #%%Gravitational constant (SI Unit)
@@ -77,7 +78,7 @@ class Rocket(object):
 
         #rocket 현재 상황
         self.state = self.create_initial_state()
-        self.current_mass = self.state[4]
+        self.current_mass = self.mass[0]
         self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12, 
                   0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12,
                   0.5 * self.current_mass * (self.D ** 2)]                     # stage별 3축의 Moment of inertia, X축과 Y축의 관성 모멘트가 같다고 가정 TODO: mass와 관성 모멘트를 계속 업데이트 해줘야 함
@@ -88,8 +89,8 @@ class Rocket(object):
 
         #self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
         self.action_table = self.create_action_table()
-        self.state_dims = len(self.state)
-        self.action_dims = len(self.action_table)
+        self.state_dims = len(Rocket.flatten(self.state))
+        self.action_dims = 25
         
 
     def reset(self, state_dict=None):
@@ -103,7 +104,7 @@ class Rocket(object):
         self.step_id = 0
         self.already_crach = False
         cv2.destroyAllWindows()
-        return self.state
+        return Rocket.flatten(self.state)
 
     def create_action_table(self): # unused
         f0 = 0.2 * self.g  # thrust
@@ -215,8 +216,8 @@ class Rocket(object):
             if self.state[5] != 2: # final stage가 아닌 경우
                 mdot -= sum(thrusts) / (self.g * self.Isp[self.state[5]])# thrust에 따른 연료소모속도
         
-        angular_velocity0 = action[0:self.num_engines[0]] + action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]]
-        angular_velocity1 = action[self.num_engines[0]:self.num_engines[0]*2] + action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2]
+        angular_velocity0 = list(action[0:self.num_engines[0]]) + list(action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]])
+        angular_velocity1 = list(action[self.num_engines[0]:self.num_engines[0]*2]) + list(action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2])
         angular_velocity_pair = np.array(list(zip(angular_velocity0, angular_velocity1)))
 
         return total_torque, total_thrust, mdot, angular_velocity_pair
@@ -228,6 +229,8 @@ class Rocket(object):
         new_position = np.add(state[0], state[1]*self.dt)
 
         new_velocity = np.add(state[1], acc_Earth*self.dt)
+        if np.isnan(new_velocity).any():
+            print(new_velocity)
 
         new_rot_angle = np.add(state[2], state[3]*self.dt)
 
@@ -243,7 +246,7 @@ class Rocket(object):
             new_fuel = max(state[4]+ mdot*self.dt, 0)
             self.current_mass += new_fuel-state[4]
         else:                               #분리가 일어나는 경우
-            new_stage = min[int(detach),2]
+            new_stage = min(int(detach),2)
             new_fuel = self.fuel_mass[new_stage]
             self.current_mass = self.mass[new_stage]
 
@@ -286,9 +289,10 @@ class Rocket(object):
         aeroF = self.get_aerofriction(r)
         
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
-        
+        if np.isnan(vdot).any():
+            print(vdot)
         wdot = torque /self.I               
-
+        
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
                                                             # timestep 지난 후 변경된 새 state return
         self.step_id += 1
@@ -308,7 +312,7 @@ class Rocket(object):
         else:
             done = False
 
-        return self.state, reward, done, None
+        return Rocket.flatten(self.state), reward, done, {}
 
     def show_path_from_state_buffer(self):
         fig = plt.figure()
@@ -380,3 +384,37 @@ class Rocket(object):
             ax.set_ylim([0, np.max(data)/2])
             ax.set_zlim([np.max(data)/2, np.max(data)])
 
+class RocketEnv(gym.Env):
+    def __init__(self):
+        super(RocketEnv, self).__init__()
+        self.rocket = Rocket()
+        
+        # Observation space
+        self.observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(self.rocket.state_dims,), dtype=np.float32
+        )
+
+        # Action space
+        low = np.array([-30] * 10 + [0] * 5 + [-30] * 6 + [0] * 3 + [0])
+        high = np.array([30] * 10 + [self.rocket.max_thrust[0]] * 5 + [30] * 6 + [self.rocket.max_thrust[1]] * 3 + [3])
+        self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)  # Gymnasium의 reset 메서드를 호출하여 seed 설정
+        state = self.rocket.reset()
+        return np.array(state, dtype=np.float32), {}
+
+    def step(self, action):
+        state, reward, done, info = self.rocket.step(action)
+        # terminated: 에피소드 종료 여부
+        # truncated: 시간 초과 등으로 에피소드가 중단되었는지 여부
+        terminated = done
+        truncated = self.rocket.step_id >= self.rocket.max_step
+        return np.array(state, dtype=np.float32), reward, terminated, truncated, info
+
+    def render(self, mode='human'):
+        # Optional: 필요하면 render 함수를 구현합니다.
+        pass
+
+    def close(self):
+        pass
