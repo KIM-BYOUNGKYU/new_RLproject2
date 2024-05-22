@@ -1,7 +1,6 @@
 import numpy as np
 import random
 import cv2
-from aerodynamics import Aerodynamics as aeroModel
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
@@ -100,10 +99,9 @@ class Rocket(object):
             self.state = self.create_initial_state()
         else:
             self.state = state_dict
-
         self.state_buffer = []
         self.step_id = 0
-        self.already_crach = False
+        self.already_crash = False
         cv2.destroyAllWindows()
         return Rocket.flatten(self.state)
 
@@ -255,27 +253,26 @@ class Rocket(object):
 
         return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle] 
     
-    def check_crash(self, state):
+    def check_crash(self):
         crash = False
         x, y, z = self.state[0]
+        vx,vy,vz = self.state[1]
         r = np.sqrt(x**2 + y**2 + z**2)
-        if r < self.R_planet:
+        if (r < self.R_planet):
             crash = True
+        if vx==0 and vy==0 and vz==0:
+            crash = True
+            
         return crash
 
     def calculate_reward(self, state):
-
         # dist between agent and target point
-        dist_y = abs(state['y'] - self.target_p[state[5]])
-
-        py = self.target_p[state[5]]
-        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 2 * (py**2)**0.5:  # hit target
-            reward = 0.25
-        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 1 * (py**2)**0.5:  # hit target
-            reward = 0.5
-        if self.task == 'launching' and abs(state['theta']) > 90 / 180 * np.pi:
-            reward = 0
-
+        altitude = np.sqrt(state[0][0]**2+state[0][1]**2+state[0][2]**2)-self.R_planet
+        dist_to_target = abs(self.target_p[state[5]]-altitude)
+        reward = np.exp(-dist_to_target/1000)
+        if dist_to_target<100:
+            reward += 10
+        
         return reward
 
     def step(self, action):
@@ -290,7 +287,7 @@ class Rocket(object):
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
         if np.isnan(vdot).any():
             print(vdot)
-        wdot = torque /self.I               
+        wdot = torque /self.I
         
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
                                                             # timestep 지난 후 변경된 새 state return
@@ -303,7 +300,7 @@ class Rocket(object):
         self.state_buffer.append(self.state)                # 기존 state buffer에 넣기
         self.state = new_state                              # 새 state update 
 
-        self.already_crash = self.check_crash(self.state)
+        self.already_crash = self.check_crash()
         #reward = self.calculate_reward(self.state)
         reward = 0
         if self.already_crash or self.step_id==self.max_step:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
@@ -411,8 +408,7 @@ class RocketEnv(gym.Env):
         truncated = self.rocket.step_id >= self.rocket.max_step
         return np.array(state, dtype=np.float32), reward, terminated, truncated, info
 
-    def render(self, mode='human'):
-        # Optional: 필요하면 render 함수를 구현합니다.
+    def render(self):
         pass
 
     def close(self):
