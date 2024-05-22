@@ -269,9 +269,9 @@ class Rocket(object):
         dist_y = abs(state['y'] - self.target_p[state[5]])
 
         py = self.target_p[state[5]]
-        if self.task == 'launching' and (dist_y**2)**0.5 - 6371 <= 2 * (py**2)**0.5:  # hit target
+        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 2 * (py**2)**0.5:  # hit target
             reward = 0.25
-        if self.task == 'launching' and (dist_y**2)**0.5 - 6371 <= 1 * (py**2)**0.5:  # hit target
+        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 1 * (py**2)**0.5:  # hit target
             reward = 0.5
         if self.task == 'launching' and abs(state['theta']) > 90 / 180 * np.pi:
             reward = 0
