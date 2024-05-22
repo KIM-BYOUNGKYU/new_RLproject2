@@ -75,6 +75,12 @@ policy.py
 policy.py
 - 함수 검토 및 주석 추가
 
+5.22 남민영 작업
+rocket.py
+- target_p 변수 추가 및 calculate_reward 수정
+- target_p 참고 자료: https://forum.nasaspaceflight.com/index.php?action=dlattach;topic=29214.0;attach=489078
+
+
 
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 

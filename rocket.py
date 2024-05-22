@@ -58,6 +58,7 @@ class Rocket(object):
         self.max_thrust = [6804000, 934000,0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
+        self.target_p = [80000, 170000, 200000]
         self.rocket_type = rocket_type
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
@@ -265,14 +266,12 @@ class Rocket(object):
     def calculate_reward(self, state):
 
         # dist between agent and target point
-        dist_x = abs(state['x'] - self.target_x)
-        dist_y = abs(state['y'] - self.target_y)
-        dist_z = abs(state['z'] - self.target_z)
+        dist_y = abs(state['y'] - self.target_p[state[5]])
 
-        px, py, pz = self.target_p
-        if self.task == 'launching' and (dist_x**2 + dist_y**2 + dist_z**2)**0.5 <= 2 * (px**2 + py**2 + pz**2)**0.5:  # hit target
+        py = self.target_p[state[5]]
+        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 2 * (py**2)**0.5:  # hit target
             reward = 0.25
-        if self.task == 'launching' and (dist_x**2 + dist_y**2 + dist_z**2)**0.5 <= 1 * (px**2 + py**2 + pz**2)**0.5:  # hit target
+        if self.task == 'launching' and (dist_y**2)**0.5 - 6371000 <= 1 * (py**2)**0.5:  # hit target
             reward = 0.5
         if self.task == 'launching' and abs(state['theta']) > 90 / 180 * np.pi:
             reward = 0
