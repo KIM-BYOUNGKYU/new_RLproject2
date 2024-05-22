@@ -26,7 +26,7 @@ if __name__ == '__main__':
     last_episode_id = 0
     REWARDS = []
 
-    net = ActorCritic(input_dim=falcon9.state_dims, output_dim=falcon9.action_dims).to(device)
+    net = ActorCritic(state_size=falcon9.state_dims, action_size=falcon9.action_dims).to(device)
     
     if len(glob.glob(os.path.join(ckpt_folder, '*.pt'))) > 0:
         # load the last ckpt
