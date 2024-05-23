@@ -301,8 +301,8 @@ class Rocket(object):
         self.state = new_state                              # 새 state update 
 
         self.already_crash = self.check_crash()
-        #reward = self.calculate_reward(self.state)
-        reward = 0
+        reward = self.calculate_reward(self.state)
+        
         if self.already_crash or self.step_id==self.max_step:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
             done = True
         else:
