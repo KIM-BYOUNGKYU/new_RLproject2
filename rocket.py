@@ -62,8 +62,8 @@ class Rocket(object):
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
 
-        self.mass=[549054, 2000, 22800]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
-        self.fuel_mass=[411000, 1800, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
+        self.mass=[553000, 119800, 8300]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
+        self.fuel_mass=[411000, 107500, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
         
         self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
         self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
