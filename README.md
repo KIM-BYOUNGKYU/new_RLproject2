@@ -105,6 +105,11 @@ rocket.py
 - train.ipynb 작업(reward plot, action csv파일로 저장)
 - 여전히 학습이 잘 안되는 부분을 확인함
 
+5.27 남민영 작업
+rocket.py
+- 1.1 검토 및 1.2(소모량 대비 고도 보상) 추가
+
+
 ---
 
 # What we need to: 

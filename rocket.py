@@ -262,6 +262,7 @@ class Rocket(object):
         velocity = state[1]
         orientation = state[2]  # 각도 (roll, pitch, yaw)
         angular_velocity = state[3]  # 각속도 (wx, wy, wz)
+        fuel_mass = state[4] # 연료 질량
 
         # 현재 고도
         altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
@@ -274,6 +275,12 @@ class Rocket(object):
         dist_to_target_altitude = abs(target_altitude - altitude)
         altitude_reward = np.exp(-dist_to_target_altitude / 1000)
 
+        # 소모량 대비 고도 기반 보상
+        fuel_usage = abs(self.fuel_mass[state[5]] - fuel_mass)
+        target_fuel_usage = abs(self.fuel_mass[state[5]] - self.fuel_mass[state[5]-1])
+        dist_to_target_altitude = abs(target_altitude / target_fuel_usage - altitude / fuel_usage)
+        altitude_reward = np.exp(-dist_to_target_altitude / 1000)
+        
         # 속도 보상: 목표 궤도에서 필요한 궤도 속도와 현재 속도의 차이를 고려
         orbital_speed = np.sqrt(self.G * self.M_planet / target_radius)
         speed_difference = abs(np.linalg.norm(velocity) - orbital_speed)
