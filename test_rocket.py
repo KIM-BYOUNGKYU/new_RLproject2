@@ -8,11 +8,12 @@ for i in range(5):
     action.append(0)
 for i in range(5):
     action.append(falcon9.max_thrust[0])
-
-for i in range(9):
+for i in range(3):
     action.append(0)
-
-action.append(0)
+for i in range(3):
+    action.append(0)
+for i in range(3):
+    action.append(falcon9.max_thrust[0])
 
 
 falcon9.step(action)

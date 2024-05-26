@@ -7,9 +7,9 @@
 - 3개의 엔진 축에 수직방향 각속도 (-30,0,30)
 - 3개의 엔진 축방향 각속도 (-30,0,30)
 - 3개의 엔진 추력(min~max) => continuous action space
-- 1개의 분리(버튼)  값이 1이상이면 1단분리, 값이 2이상이면 2단 분리
+~~- 1개의 분리(버튼)  값이 1이상이면 1단분리, 값이 2이상이면 2단 분리~~ 5.26 1553 삭제 
 => 시간이나 현재 연료 잔량에 따라 분리되도록 설정
-=> 총 25개의 값을 list로 return
+=> 총 24개의 값을 list로 return
 
 
 # state space
@@ -22,8 +22,11 @@
 - 선체를 기준으로 노즐 각도 ((0theta0, 0theta1), (1theta0, 1theta1), (2theta0, 2theta1), (3theta0, 3theta1), ...) 2D array: 2*8개 element
     theta0 = 0\~max
     theta1 = 0\~2pi
-=> 30개의 element를 state에 저장
-=> 7개의 요소를 list로 저장
+- 현재 분리 중인지 나타내는 상태 (2초가 될때까지 엔진이 작동하지 않게)
+- 현재 고장 상태 : 1개의 int (0번은 고장나지 않은 상태, 1번부터 순서대로 어떤 엔진이 고장났는지 명시) 5.26 1553추가
+
+=> 32개의 element를 state에 저장
+=> 9개의 요소를 list로 저장
 
 ---
 
@@ -40,10 +43,12 @@ rocket.py
 - 상수값 채우기
 - 부족한 부분: TODO 참조
 
+
 5.13 남민영 작업
 rocket.py
 - flatten 함수 제작, create_initial_state 수정
 - 부족한 부분: 수정된 create_initial_state에 맞춰 get_new_state 수정 필요(y축 도입)
+
 
 5.14 김병규 작업
 rocket.py
@@ -52,11 +57,13 @@ rocket.py
 test_rocket.py
 - rocket 변경 후 세부사항 수정
 
+
 5.18 남윤호 작업
 rocket.py
 - rocket.mass 수정, 관성모멘트 공식 도입
 - TODO: mass에 따라 관성모멘트가 달라지는 부분도 step에 넣어야 할 듯
 - 월요일 수업 전까지 policy.py 검토 예정
+
 
 5.19 남민영 작업
 rocket.py
@@ -66,14 +73,17 @@ policy.py
 - ActorCritic 참고 자료: https://wikidocs.net/172977
 test_train.py 생성
 
+
 5.20 남윤호 작업
 policy.py
 - 함수 검토 완료
 - 변수들의 파라미터화를 통해 테스트를 조금 더 쉽도록 함
 
+
 5.20 남민영 작업
 policy.py
 - 함수 검토 및 주석 추가
+
 
 5.22 남민영 작업
 rocket.py
@@ -81,6 +91,13 @@ rocket.py
 - target_p 참고 자료: https://forum.nasaspaceflight.com/index.php?action=dlattach;topic=29214.0;attach=489078
 
 
+5.23-24 김병규 작업
+- train.ipynb 작업 (colab에서 학습환경 구성, ppo base로 기본적인 학습 확인)
+
+
+5.26 김병규 작업
+- action에서 분리 작업 삭제, 자동분리 구현, 분리시간(2초) 구현=> state에 값 1개 더 추가함.(분리 중에는 action과 상관없이 추력이 0으로 고정) 
+- trajectory method 변경
 
 =>>>여기다가 본인이 작업한 부분 추가해서 넣으면 될 듯합니다.
 

@@ -7,8 +7,6 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from ambiance import Atmosphere
-import gymnasium as gym
-from gymnasium import spaces
 
 
 def rotation_matrix(roll, pitch, yaw):
@@ -54,7 +52,7 @@ class Rocket(object):
         self.max_step= max_steps
         self.R_planet = 6371000                # 지구반지름 TODO: 단위가 m임
         self.M_planet = 5.972*(10**(24))
-        self.max_thrust = [6804000, 934000,0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
+        self.max_thrust = [1521000, 327000, 0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
         self.target_p = [80000, 170000, 200000]
@@ -64,6 +62,7 @@ class Rocket(object):
 
         self.mass=[553000, 119800, 8300]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
         self.fuel_mass=[411000, 107500, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
+        self.engine_cutoff_fuelmass = [36000,0,-9999]
         
         self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
         self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
@@ -87,41 +86,23 @@ class Rocket(object):
         self.state_buffer = []
         self.already_crash = False
 
-        #self.engine_actor = policy.ActorCritic(input_dim=len(self.flatten(self.state)), output_dim=len(3*sum(self.num_engines)+1))
-        self.action_table = self.create_action_table()
         self.state_dims = len(Rocket.flatten(self.state))
-        self.action_dims = 25
+        self.action_dims = 24
         
 
-    def reset(self, state_dict=None):
+    def reset(self, state_list=None):
 
-        if state_dict is None:
+        if state_list is None:
             self.state = self.create_initial_state()
         else:
-            self.state = state_dict
+            self.state = state_list
         self.state_buffer = []
         self.step_id = 0
         self.already_crash = False
         cv2.destroyAllWindows()
         return Rocket.flatten(self.state)
 
-    def create_action_table(self): # unused
-        f0 = 0.2 * self.g  # thrust
-        f1 = 1.0 * self.g
-        f2 = 2 * self.g
-        vphi0 = 0  # Nozzle angular velocity
-        vphi1 = 30 / 180 * np.pi
-        vphi2 = -30 / 180 * np.pi
-        detach = 0 # 분리 버튼
 
-        action_table = [[f0, vphi0], [f0, vphi1], [f0, vphi2],
-                        [f1, vphi0], [f1, vphi1], [f1, vphi2],
-                        [f2, vphi0], [f2, vphi1], [f2, vphi2],
-                        detach
-                        ]
-        return action_table
-
-   
     def get_aerofriction(self, distance):
         #input: distance from the centor of the Earth
         #output: aerofriction vector
@@ -141,9 +122,6 @@ class Rocket(object):
             print(aeroF)
         return aeroF
 
-    def get_random_action(self):
-        return random.randint(0, len(self.action_table)-1)
-
     def create_initial_state(self):
         # predefined locations
         position = np.array([0.0, 0.0, self.R_planet])
@@ -151,7 +129,7 @@ class Rocket(object):
         angle = np.array([0.0, 0.0, 0.0])
         angular_v= np.array([0.0, 0.0, 0.0])
         state = [
-            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2))
+            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2)), 0
         ]
         
         return state
@@ -171,6 +149,9 @@ class Rocket(object):
         for pair in input_list[6]:
             for element in pair:
                 output_list.append(element)
+
+        # 엔진 분리상황 추가
+        output_list.append(input_list[7])
 
         return output_list
 
@@ -203,17 +184,18 @@ class Rocket(object):
         total_thrust = np.array([0.0,0.0,0.0])
         total_torque = np.array([0.0,0.0,0.0])
         mdot = 0
-        if self.state[4] > 0: #연료가 있는 경우
-            for i in range(len(thrusts)):
-                x_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
-                y_thrust = -thrusts[i]*np.sin(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
-                z_thrust = thrusts[i]*np.cos(angle_thrusts[i][0])
-                thrust= np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
+        if (self.state[4] > self.engine_cutoff_fuelmass[stage]) and (self.state[7] == 0):                           # 연료가 충분하고 분리작업이 진행 중이지 않은 경우
+            if stage != 2: # final stage가 아닌 경우
+                for i in range(len(thrusts)):
+                    x_thrust = -min(thrusts[i],self.max_thrust[stage])*np.sin(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
+                    y_thrust = -min(thrusts[i],self.max_thrust[stage])*np.sin(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
+                    z_thrust = min(thrusts[i],self.max_thrust[stage])*np.cos(angle_thrusts[i][0])
+                    thrust= np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
                 
-                total_thrust +=thrust                            # thrust vector의 합                            
-                total_torque +=np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)
-            if self.state[5] != 2: # final stage가 아닌 경우
-                mdot -= sum(thrusts) / (self.g * self.Isp[self.state[5]])# thrust에 따른 연료소모속도
+                    total_thrust +=thrust                            # thrust vector의 합                            
+                    total_torque +=np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)
+
+                mdot -= sum([min(f,self.max_thrust[stage]) for f in thrust]) / (self.g * self.Isp[self.state[5]])   # thrust에 따른 연료소모속도
         
         angular_velocity0 = list(action[0:self.num_engines[0]]) + list(action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]])
         angular_velocity1 = list(action[self.num_engines[0]:self.num_engines[0]*2]) + list(action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2])
@@ -221,8 +203,8 @@ class Rocket(object):
 
         return total_torque, total_thrust, mdot, angular_velocity_pair
     
-    def get_New_state(self, state, acc_Earth, angular_acc, mdot, d_angVofEngines, detach):
-        #input : [position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle], acc, angular_acc, engine angular V array, detach array 
+    def get_New_state(self, state, acc_Earth, angular_acc, mdot, d_angVofEngines):
+        #input : [position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle], acc, angular_acc, engine angular V array
         #output : derivatives of position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle
         
         new_position = np.add(state[0], state[1]*self.dt)
@@ -236,22 +218,31 @@ class Rocket(object):
         angular_acc_Earth = transform_coordinates(angular_acc,state[2][0],state[2][1],state[2][2])
         new_rot_angV = np.add(state[3], angular_acc_Earth*self.dt)
 
-        if state[5] >= int(detach):         #분리가 일어나지 않는 경우
+        new_fuel = max(state[4] + mdot*self.dt,0)               # 새 연료량 계산
+        detach_time = state[7]
+        if new_fuel <= self.engine_cutoff_fuelmass[state[5]]:   # 새 연료량이 분리 연료량보다 작거나 같은 경우(분리가 일어나는 경우)
+            if state[5] == 2:                                       # 마지막 stage임에도 분리신호가 들어오는 경우
+                print('current stage is last stage. The rocket can not be detached.')
+            else:                                                   # 분리 시작                   
+                new_stage = state[5] + 1
+                new_fuel = self.fuel_mass[new_stage]
+                self.current_mass = self.mass[new_stage]
+                detach_time = self.dt
+                self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[new_stage] ** 2) / 12, 
+                  0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[new_stage] ** 2) / 12,
+                  0.5 * self.current_mass * (self.D ** 2)]
+        else:                                                   # 분리가 일어나지 않는 경우
+            if detach_time > 0:
+                if detach_time > 2:                             # 분리에 2초가 걸린다고 가정
+                    detach_time = 0
+                else:
+                    detach_time += self.dt
             new_stage = state[5]
-            new_fuel = max(state[4]+ mdot*self.dt, 0)
-            self.current_mass += new_fuel-state[4]
-        elif state[5] == 2:                 #분리가 최대로 일어난 경우
-            new_stage = state[5]
-            new_fuel = max(state[4]+ mdot*self.dt, 0)
-            self.current_mass += new_fuel-state[4]
-        else:                               #분리가 일어나는 경우
-            new_stage = min(int(detach),2)
-            new_fuel = self.fuel_mass[new_stage]
-            self.current_mass = self.mass[new_stage]
+            self.current_mass += new_fuel - state[4]
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
 
-        return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle] 
+        return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle, detach_time] 
     
     def check_crash(self):
         crash = False
@@ -277,8 +268,6 @@ class Rocket(object):
 
     def step(self, action):
 
-        stage = self.state[5]
-
         torque , thrust, mdot, d_ang_VofEngines = self.get_propulsion(action)
         g_acc,r = self.get_gravity()
     
@@ -288,8 +277,8 @@ class Rocket(object):
         if np.isnan(vdot).any():
             print(vdot)
         wdot = torque /self.I
-        
-        new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines, action[-1])
+
+        new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines)
                                                             # timestep 지난 후 변경된 새 state return
         self.step_id += 1
         
@@ -346,17 +335,17 @@ class Rocket(object):
         v = np.linspace(0, np.pi, 100)
         x = self.R_planet * np.outer(np.cos(u), np.sin(v))
         y = self.R_planet * np.outer(np.sin(u), np.sin(v))
-        z = self.R_planet* np.outer(np.ones(np.size(u)), np.cos(v))
+        z = self.R_planet * np.outer(np.ones(np.size(u)), np.cos(v))
 
-        # Plot Earth
-        ax.plot_wireframe(x, y, z, color = 'g', alpha = 0.1)
+        # 지구 표면 플롯
+        ax.plot_wireframe(x, y, z, color='g', alpha=0.3)
 
         # 데이터 초기화 및 skip_steps 적용
         data = np.array([state[0] for state in self.state_buffer[::skip_steps]]).T
         line, = ax.plot([], [], [], 'r-', label="Trajectory")  # 빈 궤적 초기화
         marker, = ax.plot([], [], [], 'bo', markersize=5, label="Rocket")  # 로켓 마커 초기화
 
-        # 설정 축 범위
+        # 축 라벨 설정
         ax.set_xlabel('X position')
         ax.set_ylabel('Y position')
         ax.set_zlabel('Z position')
@@ -375,41 +364,18 @@ class Rocket(object):
             # 궤적 데이터 업데이트
             line.set_data(data[0, :num+1], data[1, :num+1])
             line.set_3d_properties(data[2, :num+1])
-            # 축 범위 재설정 (선택적)
-            ax.set_xlim([0, np.max(data)/2])
-            ax.set_ylim([0, np.max(data)/2])
-            ax.set_zlim([np.max(data)/2, np.max(data)])
-
-class RocketEnv(gym.Env):
-    def __init__(self):
-        super(RocketEnv, self).__init__()
-        self.rocket = Rocket()
-        
-        # Observation space
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.rocket.state_dims,), dtype=np.float32
-        )
-
-        # Action space
-        low = np.array([-30] * 10 + [0] * 5 + [-30] * 6 + [0] * 3 + [0])
-        high = np.array([30] * 10 + [self.rocket.max_thrust[0]] * 5 + [30] * 6 + [self.rocket.max_thrust[1]] * 3 + [3])
-        self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
-
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)  # Gymnasium의 reset 메서드를 호출하여 seed 설정
-        state = self.rocket.reset()
-        return np.array(state, dtype=np.float32), {}
-
-    def step(self, action):
-        state, reward, done, info = self.rocket.step(action)
-        # terminated: 에피소드 종료 여부
-        # truncated: 시간 초과 등으로 에피소드가 중단되었는지 여부
-        terminated = done
-        truncated = self.rocket.step_id >= self.rocket.max_step
-        return np.array(state, dtype=np.float32), reward, terminated, truncated, info
-
-    def render(self):
-        pass
-
-    def close(self):
-        pass
+            
+            # 현재 로켓 위치 기준으로 축 범위 설정
+            current_pos = data[:, num]
+            margin = 100000  # 여유 범위 설정
+            
+            # 축 범위 설정 - 0, 0, 0이 계속 나타나도록 하고 1:1:1 비율 유지
+            ax.set_xlim([min(0, current_pos[0] - margin), max(0, current_pos[0] + margin)])
+            ax.set_ylim([min(0, current_pos[1] - margin), max(0, current_pos[1] + margin)])
+            ax.set_zlim([min(0, current_pos[2] - margin), max(0, current_pos[2] + margin)])
+            
+            # 모든 축의 비율을 동일하게 설정
+            max_range = max(current_pos[0] + margin, current_pos[1] + margin, current_pos[2] + margin)
+            ax.set_xlim([-max_range, max_range])
+            ax.set_ylim([-max_range, max_range])
+            ax.set_zlim([-max_range, max_range])
