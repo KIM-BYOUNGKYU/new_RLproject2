@@ -257,13 +257,46 @@ class Rocket(object):
         return crash
 
     def calculate_reward(self, state):
-        # dist between agent and target point
-        altitude = np.sqrt(state[0][0]**2+state[0][1]**2+state[0][2]**2)-self.R_planet
-        dist_to_target = abs(self.target_p[state[5]]-altitude)
-        reward = np.exp(-dist_to_target/1000)
-        if dist_to_target<100:
+        # 위치 및 속도
+        position = state[0]
+        velocity = state[1]
+        orientation = state[2]  # 각도 (roll, pitch, yaw)
+        angular_velocity = state[3]  # 각속도 (wx, wy, wz)
+
+        # 현재 고도
+        altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
+
+        # 단계별 목표 고도 (원궤도)
+        target_altitude = self.target_p[state[5]]
+        target_radius = self.R_planet + target_altitude
+
+        # 고도 기반 보상
+        dist_to_target_altitude = abs(target_altitude - altitude)
+        altitude_reward = np.exp(-dist_to_target_altitude / 1000)
+
+        # 속도 보상: 목표 궤도에서 필요한 궤도 속도와 현재 속도의 차이를 고려
+        orbital_speed = np.sqrt(self.G * self.M_planet / target_radius)
+        speed_difference = abs(np.linalg.norm(velocity) - orbital_speed)
+        speed_reward = np.exp(-speed_difference / 100)
+
+        # y축 방향 회전 각도(pitch) 페널티
+        pitch_angle = orientation[1]  # pitch 각도
+        pitch_penalty = np.exp(-abs(pitch_angle) / 10)  # pitch 각도 기반 페널티
+
+        # 각속도 x축 성분 보상/페널티
+        angular_velocity_x = angular_velocity[0]
+        if angular_velocity_x > 0:
+            angular_velocity_reward = 1  # 양수일 때 보상
+        else:
+            angular_velocity_reward = np.exp(-abs(angular_velocity_x) / 10)  # 음수일 때 페널티
+
+        # 총 보상 계산
+        reward = altitude_reward + speed_reward + pitch_penalty + angular_velocity_reward
+
+        # 목표 고도에 가까워졌을 때 추가 보상
+        if dist_to_target_altitude < 100:
             reward += 10
-        
+
         return reward
 
     def step(self, action):
