@@ -268,37 +268,41 @@ class Rocket(object):
         position = state[0]
         orientation = state[2]  # 각도 (roll, pitch, yaw)
         angular_velocity = state[3]  # 각속도 (wx, wy, wz)
-        fuel_mass = state[4] # 연료 질량
 
         # 현재 고도
         altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
 
         # 목표 고도 (원궤도)
         target_altitude = self.target_p
-        target_radius = self.R_planet + target_altitude
 
         # 고도 기반 보상
         dist_to_target_altitude = abs(target_altitude - altitude)
         altitude_reward = np.exp(-dist_to_target_altitude / 1000)
 
-        # y축 방향 회전 각도(pitch) 페널티
-        pitch_angle = orientation[1]  # pitch 각도
-        pitch_penalty = np.exp(-abs(pitch_angle) / 10)  # pitch 각도 기반 페널티
+        # 자세 안정성 페널티
+        pitch_angle = orientation[1]
+        yaw_angle = orientation[2]
+        pitch_penalty = np.exp(-abs(pitch_angle) / 10)
+        yaw_penalty = np.exp(-abs(yaw_angle) / 10)
 
-        # 각속도 x축 성분 보상/페널티
-        angular_velocity_x = angular_velocity[0]
-        if angular_velocity_x >= 0:
-            angular_velocity_reward = 1  # 양수일 때 보상
-        else:
-            angular_velocity_reward = np.exp(-abs(angular_velocity_x) / 10)  # 음수일 때 페널티
-        
-        # 발사 초기에 각도가 치우치면 (3도이상 치우치면 penalty)
+        # 각속도 기반 페널티
+        angular_velocity_penalty = np.exp(-np.linalg.norm(angular_velocity) / 10)
+
+        # 초기 발사 단계에서 엔진 각도 페널티
         engine_penalty = 0
-        if (altitude <15) and (np.any(state[6][:,0] > 3)):
-            engine_penalty = -10
+        if altitude < 15:
+            engine_angle_penalty = np.sum(np.maximum(np.abs(state[6][:, 0]) - 3, 0))
+            engine_penalty = -engine_angle_penalty
 
         # 총 보상 계산
-        reward = altitude_reward + pitch_penalty + angular_velocity_reward + engine_penalty
+        reward = altitude_reward + pitch_penalty + yaw_penalty + angular_velocity_penalty + engine_penalty
+        print('total reward: ',reward)
+        print('altitude_reward:', altitude_reward)
+        print('pitch_penalty: ', pitch_penalty)
+        print('yaw_penalty: ', yaw_penalty)
+        print('angular_velocity_penalty: ',angular_velocity_penalty)
+        print('engine_penalty: ', engine_penalty)
+        print('-------------------------------------------------------------------')
 
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
