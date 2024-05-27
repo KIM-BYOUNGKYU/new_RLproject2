@@ -293,13 +293,19 @@ class Rocket(object):
             unit_position = position / np.linalg.norm(position)
             unit_velocity = velocity / np.linalg.norm(velocity)
             direction_reward = 2*np.dot(unit_position, unit_velocity)
+        # 추락 페널티
+        crash_penalty = 0
+        if altitude <= 0:
+            crash_penalty = -1000  # 큰 음의 보상
+    
         # 총 보상 계산
-        reward = altitude_reward + pitch_penalty + vx_reward + direction_reward
+        reward = altitude_reward + pitch_penalty + vx_reward + direction_reward + crash_penalty
         print('total reward: ',reward)
         print('altitude_reward:', altitude_reward)
         print('pitch_penalty: ', pitch_penalty)
         print('yx_reward: ', vx_reward)
         print('direction_reward: ', direction_reward)
+        print('crash_penalty: ',crash_penalty)
         print('-------------------------------------------------------------------')
 
         # 목표 고도에 가까워졌을 때 추가 보상
@@ -315,6 +321,7 @@ class Rocket(object):
     
         aeroF = self.get_aerofriction(r)
         
+        if 
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
         if np.isnan(vdot).any():
             print(vdot)
