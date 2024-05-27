@@ -301,6 +301,8 @@ class Rocket(object):
         # 발사 초기에 각도가 치우치면 (3도이상 치우치면 penalty)
         if (altitude <15) and (np.any(state[6][:,0] > 3)):
             engine_penalty = -10
+        else:
+            engine_penalty = 0
 
         # 총 보상 계산
         reward = altitude_reward + speed_reward + pitch_penalty + angular_velocity_reward + engine_penalty
