@@ -266,6 +266,7 @@ class Rocket(object):
     def calculate_reward(self, state):
         # 위치 및 속도
         position = state[0]
+        velocity = state[1]     # 속도
         orientation = state[2]  # 각도 (roll, pitch, yaw)
         angular_velocity = state[3]  # 각속도 (wx, wy, wz)
 
@@ -277,7 +278,10 @@ class Rocket(object):
 
         # 고도 기반 보상
         dist_to_target_altitude = abs(target_altitude - altitude)
-        altitude_reward = 3*np.exp(-dist_to_target_altitude / 100)
+        altitude_reward = 4*np.exp(-dist_to_target_altitude / 100000)
+
+        #초반 고도 상승 보상
+        if altitude < 50:
 
         # 자세 안정성 페널티
         pitch_angle = orientation[1]
