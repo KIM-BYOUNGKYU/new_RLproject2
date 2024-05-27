@@ -278,31 +278,28 @@ class Rocket(object):
 
         # 고도 기반 보상
         dist_to_target_altitude = abs(target_altitude - altitude)
-        altitude_reward = 4*np.exp(-dist_to_target_altitude / target_altitude )
+        altitude_reward = 10*np.exp(-dist_to_target_altitude / target_altitude )
 
         # 자세 안정성 페널티
         pitch_angle = orientation[1]
-        yaw_angle = orientation[2]
         pitch_penalty = np.exp(-abs(pitch_angle) / 10)
-        yaw_penalty = np.exp(-abs(yaw_angle) / 10)
+        vx_reward=0
+        if angular_velocity[0]>0:
+            vx_reward = 1
 
-        # 각속도 기반 페널티
-        angular_velocity_penalty = np.exp(-np.linalg.norm(angular_velocity) / 10)
-
-        # 초기 발사 단계에서 엔진 각도 페널티
-        #engine_penalty = 0
-        #if altitude < 15:
-        #    engine_angle_penalty = np.sum(np.maximum(np.abs(state[6][:, 0]) - 3, 0))
-        #    engine_penalty = -engine_angle_penalty
-        engine_penalty=0
+        # 단위 속도 벡터와 단위 위치 벡터의 내적을 보상으로 사용
+        direction_reward = 0
+        if altitude <100:
+            unit_position = position / np.linalg.norm(position)
+            unit_velocity = velocity / np.linalg.norm(velocity)
+            direction_reward = 2*np.dot(unit_position, unit_velocity)
         # 총 보상 계산
-        reward = altitude_reward + pitch_penalty + yaw_penalty + angular_velocity_penalty + engine_penalty
+        reward = altitude_reward + pitch_penalty + vx_reward + direction_reward
         print('total reward: ',reward)
         print('altitude_reward:', altitude_reward)
         print('pitch_penalty: ', pitch_penalty)
-        print('yaw_penalty: ', yaw_penalty)
-        print('angular_velocity_penalty: ',angular_velocity_penalty)
-        print('engine_penalty: ', engine_penalty)
+        print('yx_reward: ', vx_reward)
+        print('direction_reward: ', direction_reward)
         print('-------------------------------------------------------------------')
 
         # 목표 고도에 가까워졌을 때 추가 보상
