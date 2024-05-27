@@ -40,7 +40,7 @@ def transform_coordinates(coordinates, roll, pitch, yaw):
     return transformed_coordinates
 
 class Rocket(object):
-    def __init__(self, max_steps=100000, task='launching', rocket_type='falcon-4',
+    def __init__(self, max_steps=400000, task='launching', rocket_type='falcon-4',
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
@@ -55,7 +55,7 @@ class Rocket(object):
         self.max_thrust = [1521000, 327000, 0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
-        self.target_p = [80000, 170000, 200000]
+        self.target_p =  800000
         self.rocket_type = rocket_type
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
@@ -179,7 +179,7 @@ class Rocket(object):
         current_NumofEngines = self.num_engines[stage] 
         
         thrusts = action[NumofUsedEngines*3 + current_NumofEngines*2:NumofUsedEngines*3 + current_NumofEngines*3]
-        angle_thrusts = self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines]
+        angle_thrusts = np.radians(self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines])           # state에는 도 로 표시됨
         
         total_thrust = np.array([0.0,0.0,0.0])
         total_torque = np.array([0.0,0.0,0.0])
@@ -241,6 +241,11 @@ class Rocket(object):
             self.current_mass += new_fuel - state[4]
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
+        # theta0 값을 -30에서 30 사이로 제한
+        new_engine_angle[:, 0] = np.clip(new_engine_angle[:, 0], -30, 30)
+
+        # theta1 값을 0에서 360 사이로 맞추기 (0보다 작은 값 조정 포함)
+        new_engine_angle[:, 1] = new_engine_angle[:, 1] % 360
 
         return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle, detach_time] 
     
@@ -249,11 +254,13 @@ class Rocket(object):
         x, y, z = self.state[0]
         vx,vy,vz = self.state[1]
         r = np.sqrt(x**2 + y**2 + z**2)
-        if (r < self.R_planet):
+        altitude = r-self.R_planet
+        if (altitude < 0):
             crash = True
         if vx==0 and vy==0 and vz==0:
             crash = True
-            
+        if (altitude > self.target_p+1000):
+            crash = True
         return crash
 
     def calculate_reward(self, state):
@@ -262,12 +269,13 @@ class Rocket(object):
         velocity = state[1]
         orientation = state[2]  # 각도 (roll, pitch, yaw)
         angular_velocity = state[3]  # 각속도 (wx, wy, wz)
+        fuel_mass = state[4] # 연료 질량
 
         # 현재 고도
         altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
 
-        # 단계별 목표 고도 (원궤도)
-        target_altitude = self.target_p[state[5]]
+        # 목표 고도 (원궤도)
+        target_altitude = self.target_p
         target_radius = self.R_planet + target_altitude
 
         # 고도 기반 보상
@@ -285,13 +293,17 @@ class Rocket(object):
 
         # 각속도 x축 성분 보상/페널티
         angular_velocity_x = angular_velocity[0]
-        if angular_velocity_x > 0:
+        if angular_velocity_x >= 0:
             angular_velocity_reward = 1  # 양수일 때 보상
         else:
             angular_velocity_reward = np.exp(-abs(angular_velocity_x) / 10)  # 음수일 때 페널티
+        
+        # 발사 초기에 각도가 치우치면 (3도이상 치우치면 penalty)
+        if (altitude <15) and (np.any(state[6][:,0] > 3)):
+            engine_penalty = -10
 
         # 총 보상 계산
-        reward = altitude_reward + speed_reward + pitch_penalty + angular_velocity_reward
+        reward = altitude_reward + speed_reward + pitch_penalty + angular_velocity_reward + engine_penalty
 
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
