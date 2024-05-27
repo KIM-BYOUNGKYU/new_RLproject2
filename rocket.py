@@ -266,7 +266,6 @@ class Rocket(object):
     def calculate_reward(self, state):
         # 위치 및 속도
         position = state[0]
-        velocity = state[1]
         orientation = state[2]  # 각도 (roll, pitch, yaw)
         angular_velocity = state[3]  # 각속도 (wx, wy, wz)
         fuel_mass = state[4] # 연료 질량
@@ -281,11 +280,6 @@ class Rocket(object):
         # 고도 기반 보상
         dist_to_target_altitude = abs(target_altitude - altitude)
         altitude_reward = np.exp(-dist_to_target_altitude / 1000)
-
-        # 속도 보상: 목표 궤도에서 필요한 궤도 속도와 현재 속도의 차이를 고려
-        orbital_speed = np.sqrt(self.G * self.M_planet / target_radius)
-        speed_difference = abs(np.linalg.norm(velocity) - orbital_speed)
-        speed_reward = np.exp(-speed_difference / 100)
 
         # y축 방향 회전 각도(pitch) 페널티
         pitch_angle = orientation[1]  # pitch 각도
@@ -304,7 +298,7 @@ class Rocket(object):
             engine_penalty = -10
 
         # 총 보상 계산
-        reward = altitude_reward + speed_reward + pitch_penalty + angular_velocity_reward + engine_penalty
+        reward = altitude_reward + pitch_penalty + angular_velocity_reward + engine_penalty
 
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
