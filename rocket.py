@@ -55,7 +55,7 @@ class Rocket(object):
         self.max_thrust = [1521000, 327000, 0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
 
         #rocket configuration
-        self.target_p = [80000, 170000, 200000]
+        self.target_p =  200000
         self.rocket_type = rocket_type
         self.D = 3.7                                 # rocket diameter (meters)
         self.H = [70,27.4,13.1]                          # rocket height (meters) 
@@ -267,8 +267,8 @@ class Rocket(object):
         # 현재 고도
         altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
 
-        # 단계별 목표 고도 (원궤도)
-        target_altitude = self.target_p[state[5]]
+        # 목표 고도 (원궤도)
+        target_altitude = self.target_p
         target_radius = self.R_planet + target_altitude
 
         # 고도 기반 보상
@@ -292,7 +292,7 @@ class Rocket(object):
 
         # 각속도 x축 성분 보상/페널티
         angular_velocity_x = angular_velocity[0]
-        if angular_velocity_x > 0:
+        if angular_velocity_x >= 0:
             angular_velocity_reward = 1  # 양수일 때 보상
         else:
             angular_velocity_reward = np.exp(-abs(angular_velocity_x) / 10)  # 음수일 때 페널티
