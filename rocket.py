@@ -289,11 +289,11 @@ class Rocket(object):
         angular_velocity_penalty = np.exp(-np.linalg.norm(angular_velocity) / 10)
 
         # 초기 발사 단계에서 엔진 각도 페널티
-        engine_penalty = 0
-        if altitude < 15:
-            engine_angle_penalty = np.sum(np.maximum(np.abs(state[6][:, 0]) - 3, 0))
-            engine_penalty = -engine_angle_penalty
-
+        #engine_penalty = 0
+        #if altitude < 15:
+        #    engine_angle_penalty = np.sum(np.maximum(np.abs(state[6][:, 0]) - 3, 0))
+        #    engine_penalty = -engine_angle_penalty
+        engine_penalty=0
         # 총 보상 계산
         reward = altitude_reward + pitch_penalty + yaw_penalty + angular_velocity_penalty + engine_penalty
         print('total reward: ',reward)
