@@ -179,7 +179,7 @@ class Rocket(object):
         current_NumofEngines = self.num_engines[stage] 
         
         thrusts = action[NumofUsedEngines*3 + current_NumofEngines*2:NumofUsedEngines*3 + current_NumofEngines*3]
-        angle_thrusts = self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines]
+        angle_thrusts = np.radians(self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines])
         
         total_thrust = np.array([0.0,0.0,0.0])
         total_torque = np.array([0.0,0.0,0.0])
