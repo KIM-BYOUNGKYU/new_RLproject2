@@ -321,7 +321,6 @@ class Rocket(object):
     
         aeroF = self.get_aerofriction(r)
         
-        if 
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
         if np.isnan(vdot).any():
             print(vdot)
