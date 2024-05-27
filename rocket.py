@@ -280,9 +280,6 @@ class Rocket(object):
         dist_to_target_altitude = abs(target_altitude - altitude)
         altitude_reward = 4*np.exp(-dist_to_target_altitude / 100000)
 
-        #초반 고도 상승 보상
-        if altitude < 50:
-
         # 자세 안정성 페널티
         pitch_angle = orientation[1]
         yaw_angle = orientation[2]
