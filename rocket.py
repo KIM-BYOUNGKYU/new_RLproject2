@@ -300,13 +300,6 @@ class Rocket(object):
     
         # 총 보상 계산
         reward = altitude_reward + pitch_penalty + vx_reward + direction_reward + crash_penalty
-        print('total reward: ',reward)
-        print('altitude_reward:', altitude_reward)
-        print('pitch_penalty: ', pitch_penalty)
-        print('yx_reward: ', vx_reward)
-        print('direction_reward: ', direction_reward)
-        print('crash_penalty: ',crash_penalty)
-        print('-------------------------------------------------------------------')
 
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
