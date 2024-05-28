@@ -292,7 +292,7 @@ class Rocket(object):
 
         # 고도 기반 보상
         dist_to_target_altitude = abs(target_altitude - altitude)
-        altitude_reward = 10*np.exp(-dist_to_target_altitude / target_altitude )
+        altitude_reward = np.exp(-dist_to_target_altitude / target_altitude )
 
         # 자세 안정성 페널티
         pitch_angle = orientation[1]
@@ -320,7 +320,7 @@ class Rocket(object):
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
             reward += 10
-            
+
         return reward
 
     def step(self, action):
