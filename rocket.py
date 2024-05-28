@@ -122,7 +122,7 @@ class Rocket(object):
 
     def create_initial_state(self):
         # predefined locations
-        position = np.array([0.0, 0.0, self.R_planet])
+        position = np.array([0.0, 0.0, self.R_planet+10])
         velocity = np.array([0.0, 0.0, 0.0])
         angle = np.array([0.0, 0.0, 0.0])
         angular_v= np.array([0.0, 0.0, 0.0])
