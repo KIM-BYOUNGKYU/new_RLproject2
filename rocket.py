@@ -320,13 +320,7 @@ class Rocket(object):
         # 목표 고도에 가까워졌을 때 추가 보상
         if dist_to_target_altitude < 100:
             reward += 10
-
-        print(altitude_reward)
-        print(pitch_penalty)
-        print(vx_reward)
-        print(direction_reward)
-        print(crash_penalty)
-        print("=================================")
+            
         return reward
 
     def step(self, action):
