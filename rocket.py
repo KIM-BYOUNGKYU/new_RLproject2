@@ -304,9 +304,11 @@ class Rocket(object):
         # 단위 속도 벡터와 단위 위치 벡터의 내적을 보상으로 사용
         direction_reward = 0
         if altitude <100:
-            unit_position = position / np.linalg.norm(position)
-            unit_velocity = velocity / np.linalg.norm(velocity)
-            direction_reward = np.dot(unit_position, unit_velocity)
+            if np.linalg.norm(velocity)>0:
+                unit_position = position / np.linalg.norm(position)
+                unit_velocity = velocity / np.linalg.norm(velocity)
+                direction_reward = np.dot(unit_position, unit_velocity)
+
         # 추락 페널티
         crash_penalty = 0
         if altitude <= 0:
