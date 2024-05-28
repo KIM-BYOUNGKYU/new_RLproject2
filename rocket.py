@@ -306,7 +306,7 @@ class Rocket(object):
         if altitude <100:
             unit_position = position / np.linalg.norm(position)
             unit_velocity = velocity / np.linalg.norm(velocity)
-            direction_reward = 2*np.dot(unit_position, unit_velocity)
+            direction_reward = np.dot(unit_position, unit_velocity)
         # 추락 페널티
         crash_penalty = 0
         if altitude <= 0:
@@ -319,6 +319,12 @@ class Rocket(object):
         if dist_to_target_altitude < 100:
             reward += 10
 
+        print(altitude_reward)
+        print(pitch_penalty)
+        print(vx_reward)
+        print(direction_reward)
+        print(crash_penalty)
+        print("=================================")
         return reward
 
     def step(self, action):
@@ -329,18 +335,13 @@ class Rocket(object):
         aeroF = self.get_aerofriction(r)
         
         vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
-        if np.isnan(vdot).any():
-            print(vdot)
+
         wdot = torque /self.I
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines)
                                                             # timestep 지난 후 변경된 새 state return
         self.step_id += 1
         
-        
-        if np.isnan(self.state[1]).any():
-            print(self.state[1])
-
         self.state_buffer.append(self.state)                # 기존 state buffer에 넣기
         self.state = new_state                              # 새 state update 
 
