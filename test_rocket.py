@@ -3,7 +3,7 @@ import rocket
 falcon9 = rocket.Rocket(max_steps=400000)
 action = []
 for i in range(5):
-    action.append(0.0001)
+    action.append(1)
 for i in range(5):
     action.append(1)
 for i in range(5):

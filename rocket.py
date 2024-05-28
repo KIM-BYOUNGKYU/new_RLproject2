@@ -89,7 +89,6 @@ class Rocket(object):
         self.state_dims = len(Rocket.flatten(self.state))
         self.action_dims = 24
         
-
     def reset(self, state_list=None):
 
         if state_list is None:
@@ -101,7 +100,6 @@ class Rocket(object):
         self.already_crash = False
         cv2.destroyAllWindows()
         return Rocket.flatten(self.state)
-
 
     def get_aerofriction(self, distance):
         #input: distance from the centor of the Earth
@@ -129,7 +127,7 @@ class Rocket(object):
         angle = np.array([0.0, 0.0, 0.0])
         angular_v= np.array([0.0, 0.0, 0.0])
         state = [
-            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2)), 0
+            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2)), 0, 0
         ]
         
         return state
@@ -153,6 +151,9 @@ class Rocket(object):
         # 엔진 분리상황 추가
         output_list.append(input_list[7])
 
+        # 엔진 고장상태 추가
+        output_list.append(input_list[8])
+
         return output_list
 
     def get_gravity(self):
@@ -174,12 +175,15 @@ class Rocket(object):
         #input: action
         #output: total_torque;nparray, total_thrust;nparray, mdot, 엔진 노즐의 angular velocity pair
         stage = self.state[5]   #state의 5번째 값은 current_Stage에 해당됨.
-        
+        Fault = self.state[8]
         NumofUsedEngines= sum(self.num_engines[0:stage]) 
         current_NumofEngines = self.num_engines[stage] 
         
         thrusts = action[NumofUsedEngines*3 + current_NumofEngines*2:NumofUsedEngines*3 + current_NumofEngines*3]
         angle_thrusts = np.radians(self.state[6][NumofUsedEngines:NumofUsedEngines+current_NumofEngines])           # state에는 도 로 표시됨
+        
+        if (Fault)>NumofUsedEngines and Fault<=current_NumofEngines:    # 고장시 해당 엔진 추력 0으로 고정
+            thrusts[Fault-1] = 0
         
         total_thrust = np.array([0.0,0.0,0.0])
         total_torque = np.array([0.0,0.0,0.0])
@@ -205,13 +209,17 @@ class Rocket(object):
     
     def get_New_state(self, state, acc_Earth, angular_acc, mdot, d_angVofEngines):
         #input : [position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle], acc, angular_acc, engine angular V array
-        #output : derivatives of position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle
+        #output : derivatives of position, velocity, rotational angle, angular velocity, feul 질량, current stage, engine angle, detach time, fault
         
         new_position = np.add(state[0], state[1]*self.dt)
 
         new_velocity = np.add(state[1], acc_Earth*self.dt)
-        if np.isnan(new_velocity).any():
-            print(new_velocity)
+
+        x, y, z = new_position
+        r = np.sqrt(x**2 + y**2 + z**2)
+        if r < self.R_planet:
+            new_position = new_position*self.R_planet/r
+            new_velocity = np.array([0,0,0])
 
         new_rot_angle = np.add(state[2], state[3]*self.dt)
 
@@ -241,13 +249,19 @@ class Rocket(object):
             self.current_mass += new_fuel - state[4]
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
+
         # theta0 값을 -30에서 30 사이로 제한
         new_engine_angle[:, 0] = np.clip(new_engine_angle[:, 0], -30, 30)
 
         # theta1 값을 0에서 360 사이로 맞추기 (0보다 작은 값 조정 포함)
         new_engine_angle[:, 1] = new_engine_angle[:, 1] % 360
 
-        return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle, detach_time] 
+        new_Fault = state[8]
+        if state[8] == 0 and False:
+            if random.random()< p:
+                new_Fault = random.randint(1,8)
+
+        return [new_position, new_velocity, new_rot_angle, new_rot_angV, new_fuel, new_stage, new_engine_angle, detach_time, new_Fault] 
     
     def check_crash(self):
         crash = False
@@ -331,7 +345,7 @@ class Rocket(object):
         self.state = new_state                              # 새 state update 
 
         self.already_crash = self.check_crash()
-        reward = self.calculate_reward(self.state)
+        reward = self.calculate_reward(new_state)
         
         if self.already_crash or self.step_id==self.max_step:       #문제가 생겨 더이상 진행하지 못하거나 정해진 시간이 전부 지난 경우
             done = True
