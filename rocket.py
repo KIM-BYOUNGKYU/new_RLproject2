@@ -417,14 +417,14 @@ class Rocket(object):
         distance_reward = np.exp(-distance/self.target_p)
         
         # 안정성 보상 (각속도가 작을수록 보상이 큼)
-        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))
+        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))*distance_reward
 
         #속도 보상
         velocity_reward = 0
         norm_velocity = np.linalg.norm(velocity)
         if norm_velocity > 0:
             velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
-            velocity_reward = velocity_perpend/np.linalg.norm(velocity)               #거리벡터와 수직인 속도성분이 차지하는 비율 
+            velocity_reward = velocity_perpend/np.linalg.norm(velocity)*distance_reward               #거리벡터와 수직인 속도성분이 차지하는 비율 
 
         #충돌 페널티
         collision_penalty = 0
