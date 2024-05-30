@@ -410,7 +410,7 @@ class Rocket(object):
         x, y, z = position
 
         # 목표 궤도로부터의 거리 계산
-        distance = distance_to_polar_orbit(x, y, z, self.target_p, self.polarorbit_alpha)
+        distance = distance_to_polar_orbit(x, y, z, self.target_p+self.R_planet, self.polarorbit_alpha)
         
         # 거리 보상 (거리가 짧을수록 보상이 큼)
         distance_reward = 3*np.exp(-distance/self.target_p)
