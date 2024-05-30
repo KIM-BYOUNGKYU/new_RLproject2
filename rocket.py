@@ -135,7 +135,7 @@ class Rocket(object):
         self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12, 
                   0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12,
                   0.5 * self.current_mass * (self.D ** 2)]                     # stage별 3축의 Moment of inertia, X축과 Y축의 관성 모멘트가 같다고 가정 TODO: mass와 관성 모멘트를 계속 업데이트 해줘야 함
-        
+        self.distance = 0
         self.step_id = 0
         self.state_buffer = []
         self.already_crash = False
@@ -186,7 +186,7 @@ class Rocket(object):
         theta = 0
         # 초기 위치 벡터
         position = transform_coordinates(np.array([0,0,self.R_planet]),phi,theta,0)
-
+        self.distance = distance_to_polar_orbit(position[0], position[1], position[2], self.target_p+self.R_planet, self.polarorbit_alpha)
         # 초기 속도 (정지 상태)
         velocity = np.array([0.0, 0.0, 0.0])
 
@@ -409,26 +409,27 @@ class Rocket(object):
         # 로켓의 현재 위치
         x, y, z = position
 
-        # 목표 궤도로부터의 거리 계산
+        # 목표 궤도로부터의 거리 계산 # 거리 보상 (거리가 짧을수록 보상이 큼)
         distance = distance_to_polar_orbit(x, y, z, self.target_p+self.R_planet, self.polarorbit_alpha)
+        if self.distance < distance:
+            distance_reward = 1
         
-        # 거리 보상 (거리가 짧을수록 보상이 큼)
-        distance_reward = 3*np.exp(-distance/self.target_p)
+        alpha = np.exp(-distance/self.target_p)
         
         # 안정성 보상 (각속도가 작을수록 보상이 큼)
-        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))*distance_reward
+        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))*alpha
 
         #속도 보상
         velocity_reward = 0
         norm_velocity = np.linalg.norm(velocity)
         if norm_velocity > 0:
             velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
-            velocity_reward = velocity_perpend/np.linalg.norm(velocity)*distance_reward               #거리벡터와 수직인 속도성분이 차지하는 비율 
+            velocity_reward = velocity_perpend/np.linalg.norm(velocity)*alpha             #거리벡터와 수직인 속도성분이 차지하는 비율 
 
         #충돌 페널티
         collision_penalty = 0
         if x**2+y**2+z**2==self.R_planet**2:
-            collision_penalty = -1
+            collision_penalty = -5
 
         # 총 보상 계산
         reward = distance_reward + angular_velocity_stability + velocity_reward + collision_penalty
