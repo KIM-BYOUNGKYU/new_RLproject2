@@ -324,7 +324,6 @@ class Rocket(object):
             self.current_mass += new_fuel - state[4]
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
-
         # theta값을 -30에서 30 사이로 제한
         new_engine_angle= np.clip(new_engine_angle, -30, 30)
 
@@ -414,7 +413,7 @@ class Rocket(object):
         distance = distance_to_polar_orbit(x, y, z, self.target_p, self.polarorbit_alpha)
         
         # 거리 보상 (거리가 짧을수록 보상이 큼)
-        distance_reward = np.exp(-distance/self.target_p)
+        distance_reward = 3*np.exp(-distance/self.target_p)
         
         # 안정성 보상 (각속도가 작을수록 보상이 큼)
         angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))*distance_reward
@@ -429,7 +428,7 @@ class Rocket(object):
         #충돌 페널티
         collision_penalty = 0
         if x**2+y**2+z**2==self.R_planet**2:
-            collision_penalty = -10
+            collision_penalty = -1
 
         # 총 보상 계산
         reward = distance_reward + angular_velocity_stability + velocity_reward + collision_penalty
