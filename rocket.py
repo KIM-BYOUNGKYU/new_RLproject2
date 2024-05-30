@@ -179,9 +179,11 @@ class Rocket(object):
 
     def create_initial_state(self):
         # 지구 표면의 랜덤한 위치 선택
-        theta = np.random.uniform(0, 360)  
-        phi = np.random.uniform(0, 360)  
+        #theta = np.random.uniform(0, 360)  
+        #phi = np.random.uniform(0, 360)  
 
+        phi = 45
+        theta = 0
         # 초기 위치 벡터
         position = transform_coordinates(np.array([0,0,self.R_planet]),phi,theta,0)
 
@@ -192,8 +194,8 @@ class Rocket(object):
         angle = np.array([phi, theta, 0.0])  
 
         # 극궤도 설정
-        self.polarorbit_alpha = np.arctan(np.tan(phi)*np.sin(theta))
-
+        #self.polarorbit_alpha = np.arctan(np.tan(phi)*np.sin(theta))
+        self.polarorbit_alpha = 0
         # 초기 각속도
         angular_v = np.array([0.0, 0.0, 0.0])
 
