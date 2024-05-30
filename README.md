@@ -1,11 +1,11 @@
 #https://github.com/cmontalvo251/aerospace/blob/main/rockets/rocket_seminar_series/two_stage_rocket_w_aerodynamics.py
 
 # action space
-- 5개의 엔진 축에 수직방향 각속도 (-30,0,30)
-- 5개의 엔진 축방향 각속도 (-30,0,30)
+- 5개의 엔진 x축방향 각속도 (-30~30)
+- 5개의 엔진 y축방향 각속도 (-30~30)
 - 5개의 엔진 추력(min~max) => continuous action space
-- 3개의 엔진 축에 수직방향 각속도 (-30,0,30)
-- 3개의 엔진 축방향 각속도 (-30,0,30)
+- 3개의 엔진 x축방향 각속도 (-30~30)
+- 3개의 엔진 y축방향 각속도 (-30~30)
 - 3개의 엔진 추력(min~max) => continuous action space
 ~~- 1개의 분리(버튼)  값이 1이상이면 1단분리, 값이 2이상이면 2단 분리~~ 5.26 1553 삭제 
 => 시간이나 현재 연료 잔량에 따라 분리되도록 설정

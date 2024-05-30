@@ -8,7 +8,6 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from ambiance import Atmosphere
 
-
 def rotation_matrix(roll, pitch, yaw):
     roll = np.radians(roll)
     pitch = np.radians(pitch)
@@ -39,6 +38,60 @@ def transform_coordinates(coordinates, roll, pitch, yaw):
     transformed_coordinates = np.dot(R, coordinates)
     return transformed_coordinates
 
+def inverse_rotation_matrix(roll, pitch, yaw):
+    roll = np.radians(roll)
+    pitch = np.radians(pitch)
+    yaw = np.radians(yaw)
+    
+    # Roll에 대한 회전 행렬
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(roll), -np.sin(roll)],
+                    [0, np.sin(roll), np.cos(roll)]])
+    
+    # Pitch에 대한 회전 행렬
+    R_y = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                    [0, 1, 0],
+                    [-np.sin(pitch), 0, np.cos(pitch)]])
+    
+    # Yaw에 대한 회전 행렬
+    R_z = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                    [np.sin(yaw), np.cos(yaw), 0],
+                    [0, 0, 1]])
+    
+    # 회전 행렬 결합
+    R = np.dot(R_x, np.dot(R_y, R_z))
+    
+    return R
+
+def transform_inverse_coordinates(coordinates, roll, pitch, yaw):
+    R = inverse_rotation_matrix(-roll, -pitch, -yaw)
+    transformed_coordinates = np.dot(R, coordinates)
+    return transformed_coordinates
+
+def distance_to_polar_orbit(x, y, z, R, alpha):
+    """
+    임의의 점 (x, y, z)와 북극을 지나는 반경 R의 극궤도 사이의 가장 가까운 거리를 계산합니다.
+    
+    x, y, z: 임의의 점의 좌표
+    R: 극궤도의 반경
+    alpha: y축에서 x축으로의 각도 (라디안 단위)
+    
+    return: 극궤도로부터의 가장 가까운 거리
+    """
+    # 평면과 점 사이의 거리 h
+    h = np.abs(np.cos(alpha) * x - np.sin(alpha) * y) / np.sqrt(np.cos(alpha)**2 + np.sin(alpha)**2)
+    
+    # 원점에서 주어진 점까지의 거리 d
+    d = np.sqrt(x**2 + y**2 + z**2)
+    
+    # 평면에 투영된 선분의 길이 l
+    l = np.sqrt(d**2 - h**2)
+    
+    # 원궤도와 점 사이의 최단 거리
+    distance = np.sqrt((R - l)**2 + h**2)
+    
+    return distance
+
 class Rocket(object):
     def __init__(self, max_steps=400000, task='launching', rocket_type='falcon-4',
                  viewport_h=768, path_to_bg_img=None, fault=False):
@@ -53,6 +106,7 @@ class Rocket(object):
         self.R_planet = 6371000                # 지구반지름 TODO: 단위가 m임
         self.M_planet = 5.972*(10**(24))
         self.max_thrust = [1521000, 327000, 0]       # 최대 추력, 1단과 2단이 다름, 모든 엔진값의 합 -> 나중에 엔진당 추력으로 변환 필요
+        self.polarorbit_alpha = 0                   #극궤도의 틀어진 정도
 
         #rocket configuration
         self.target_p =  800000
@@ -95,6 +149,9 @@ class Rocket(object):
             self.state = self.create_initial_state()
         else:
             self.state = state_list
+        self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12, 
+                  0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12,
+                  0.5 * self.current_mass * (self.D ** 2)] 
         self.state_buffer = []
         self.step_id = 0
         self.already_crash = False
@@ -121,15 +178,30 @@ class Rocket(object):
         return aeroF
 
     def create_initial_state(self):
-        # predefined locations
-        position = np.array([0.0, 0.0, self.R_planet+10])
+        # 지구 표면의 랜덤한 위치 선택
+        theta = np.random.uniform(0, 360)  
+        phi = np.random.uniform(0, 360)  
+
+        # 초기 위치 벡터
+        position = transform_coordinates(np.array([0,0,self.R_planet]),phi,theta,0)
+
+        # 초기 속도 (정지 상태)
         velocity = np.array([0.0, 0.0, 0.0])
-        angle = np.array([0.0, 0.0, 0.0])
-        angular_v= np.array([0.0, 0.0, 0.0])
+
+        # 초기 발사 각도 (지구 중심에서 벗어나는 방향)
+        angle = np.array([phi, theta, 0.0])  
+
+        # 극궤도 설정
+        self.polarorbit_alpha = np.arctan(np.tan(phi)*np.sin(theta))
+
+        # 초기 각속도
+        angular_v = np.array([0.0, 0.0, 0.0])
+
+        # 초기 상태 설정
         state = [
-            position, velocity, angle, angular_v, self.fuel_mass[0],0, np.zeros((8, 2)), 0, 0
+            position, velocity, angle, angular_v, self.fuel_mass[0], 0, np.zeros((8, 2)), 0, 0
         ]
-        
+
         return state
     
     def flatten(input_list) :
@@ -191,9 +263,9 @@ class Rocket(object):
         if (self.state[4] > self.engine_cutoff_fuelmass[stage]) and (self.state[7] == 0):                           # 연료가 충분하고 분리작업이 진행 중이지 않은 경우
             if stage != 2: # final stage가 아닌 경우
                 for i in range(len(thrusts)):
-                    x_thrust = -min(thrusts[i],self.max_thrust[stage])*np.sin(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
-                    y_thrust = -min(thrusts[i],self.max_thrust[stage])*np.sin(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
-                    z_thrust = min(thrusts[i],self.max_thrust[stage])*np.cos(angle_thrusts[i][0])
+                    x_thrust = min(thrusts[i],self.max_thrust[stage])*np.sin(angle_thrusts[i][0])
+                    y_thrust = -min(thrusts[i],self.max_thrust[stage])*np.cos(angle_thrusts[i][0])*np.sin(angle_thrusts[i][1])
+                    z_thrust = min(thrusts[i],self.max_thrust[stage])*np.cos(angle_thrusts[i][0])*np.cos(angle_thrusts[i][1])
                     thrust= np.array([x_thrust,y_thrust,z_thrust])     # 엔진별 thrust vector 생성
                 
                     total_thrust +=thrust                            # thrust vector의 합                            
@@ -217,13 +289,14 @@ class Rocket(object):
 
         x, y, z = new_position
         r = np.sqrt(x**2 + y**2 + z**2)
-        if r < self.R_planet:
+
+        if (r < self.R_planet):
             new_position = new_position*self.R_planet/r
             new_velocity = np.array([0,0,0])
 
         new_rot_angle = np.add(state[2], state[3]*self.dt)
 
-        angular_acc_Earth = transform_coordinates(angular_acc,state[2][0],state[2][1],state[2][2])
+        angular_acc_Earth = angular_acc
         new_rot_angV = np.add(state[3], angular_acc_Earth*self.dt)
 
         new_fuel = max(state[4] + mdot*self.dt,0)               # 새 연료량 계산
@@ -250,11 +323,8 @@ class Rocket(object):
 
         new_engine_angle = np.add(state[6], d_angVofEngines*self.dt)
 
-        # theta0 값을 -30에서 30 사이로 제한
-        new_engine_angle[:, 0] = np.clip(new_engine_angle[:, 0], -30, 30)
-
-        # theta1 값을 0에서 360 사이로 맞추기 (0보다 작은 값 조정 포함)
-        new_engine_angle[:, 1] = new_engine_angle[:, 1] % 360
+        # theta값을 -30에서 30 사이로 제한
+        new_engine_angle= np.clip(new_engine_angle, -30, 30)
 
         new_Fault = state[8]
         if state[8] == 0 and False:
@@ -269,59 +339,101 @@ class Rocket(object):
         vx,vy,vz = self.state[1]
         r = np.sqrt(x**2 + y**2 + z**2)
         altitude = r-self.R_planet
-        if (altitude < 0):
+        if (altitude ==0):
             crash = True
         if vx==0 and vy==0 and vz==0:
             crash = True
-        if (altitude > self.target_p+1000):
+        if (altitude > self.target_p+5000):
             crash = True
         return crash
 
-    def calculate_reward(self, state):
+#    def calculate_reward(self, state):
         # 위치 및 속도
-        position = state[0]
-        velocity = state[1]     # 속도
-        orientation = state[2]  # 각도 (roll, pitch, yaw)
-        angular_velocity = state[3]  # 각속도 (wx, wy, wz)
-
+#        position = state[0]
+#        velocity = state[1]     # 속도
+#        orientation = state[2]  # 각도 (roll, pitch, yaw)
+#        angular_velocity = state[3]  # 각속도 (wx, wy, wz)
+#        old_posit = self.state[0]
+        
         # 현재 고도
-        altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
+#        old_altitude = np.sqrt(old_posit[0]**2 + old_posit[1]**2 + old_posit[2]**2) - self.R_planet
+#        altitude = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2) - self.R_planet
 
         # 목표 고도 (원궤도)
-        target_altitude = self.target_p
+#        target_altitude = self.target_p
+#        dist_to_target_altitude = target_altitude-altitude
+#
+#        # 고도 기반 보상
+#        altitude_reward = 0
+#        if altitude>old_altitude:
+#            altitude_reward=1
 
-        # 고도 기반 보상
-        dist_to_target_altitude = abs(target_altitude - altitude)
-        altitude_reward = np.exp(-dist_to_target_altitude / target_altitude )
+#        # 자세 안정성 페널티
+#        pitch_angle = orientation[1]
+#        pitch_penalty = -1
+#        #if (pitch_angle<3) and (pitch_angle>-3):
+#        #    pitch_penalty = 0
+#        #vx_reward=0
+#        #if angular_velocity[0]>0:
+#        #    vx_reward = 1
 
-        # 자세 안정성 페널티
-        pitch_angle = orientation[1]
-        pitch_penalty = np.exp(-abs(pitch_angle) / 10)
-        vx_reward=0
-        if angular_velocity[0]>0:
-            vx_reward = 1
+#        # 단위 속도 벡터와 단위 위치 벡터의 내적을 보상으로 사용
+#        direction_reward = 0
+#        #if altitude <100:
+#        #    if np.linalg.norm(velocity)>0:
+#        #        unit_position = position / np.linalg.norm(position)
+#        #        unit_velocity = velocity / np.linalg.norm(velocity)
+#        #        direction_reward = np.dot(unit_position, unit_velocity)
 
-        # 단위 속도 벡터와 단위 위치 벡터의 내적을 보상으로 사용
-        direction_reward = 0
-        if altitude <100:
-            if np.linalg.norm(velocity)>0:
-                unit_position = position / np.linalg.norm(position)
-                unit_velocity = velocity / np.linalg.norm(velocity)
-                direction_reward = np.dot(unit_position, unit_velocity)
-
-        # 추락 페널티
-        crash_penalty = 0
-        if altitude <= 0:
-            crash_penalty = -1000  # 큰 음의 보상
+#        # 추락 페널티
+#        crash_penalty = 0
+#        if altitude < 0:
+#            crash_penalty = -1000  # 큰 음의 보상
     
-        # 총 보상 계산
-        reward = altitude_reward + pitch_penalty + vx_reward + direction_reward + crash_penalty
+#        # 총 보상 계산
+#        reward = altitude_reward + pitch_penalty + direction_reward + crash_penalty
 
         # 목표 고도에 가까워졌을 때 추가 보상
-        if dist_to_target_altitude < 100:
-            reward += 10
+#        if dist_to_target_altitude < 100:
+#            reward += 10
 
+#        return reward
+    def calculate_reward(self, state):
+       
+        # 상태 정보
+        position = state[0]
+        velocity = state[1]
+        angular_velocity = state[3]
+
+        # 로켓의 현재 위치
+        x, y, z = position
+
+        # 목표 궤도로부터의 거리 계산
+        distance = distance_to_polar_orbit(x, y, z, self.target_p, self.polarorbit_alpha)
+        
+        # 거리 보상 (거리가 짧을수록 보상이 큼)
+        distance_reward = np.exp(-distance/self.target_p)
+        
+        # 안정성 보상 (각속도가 작을수록 보상이 큼)
+        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))
+
+        #속도 보상
+        velocity_reward = 0
+        norm_velocity = np.linalg.norm(velocity)
+        if norm_velocity > 0:
+            velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
+            velocity_reward = velocity_perpend/np.linalg.norm(velocity)               #거리벡터와 수직인 속도성분이 차지하는 비율 
+
+        #충돌 페널티
+        collision_penalty = 0
+        if x**2+y**2+z**2==self.R_planet**2:
+            collision_penalty = -10
+
+        # 총 보상 계산
+        reward = distance_reward + angular_velocity_stability + velocity_reward + collision_penalty
+        
         return reward
+
 
     def step(self, action):
 
@@ -330,9 +442,10 @@ class Rocket(object):
     
         aeroF = self.get_aerofriction(r)
         
-        vdot = g_acc + (aeroF + transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2]))/self.current_mass
+        thrust_e = transform_coordinates(thrust, self.state[2][0], self.state[2][1], self.state[2][2])
+        vdot = g_acc + (aeroF + thrust_e)/self.current_mass
 
-        wdot = torque /self.I
+        wdot = transform_coordinates(torque/self.I,self.state[2][0], self.state[2][1], self.state[2][2])
 
         new_state = self.get_New_state(self.state, vdot, wdot,mdot, d_ang_VofEngines)
                                                             # timestep 지난 후 변경된 새 state return
@@ -348,7 +461,7 @@ class Rocket(object):
             done = True
         else:
             done = False
-
+        
         return Rocket.flatten(self.state), reward, done, {}
 
     def show_path_from_state_buffer(self):
