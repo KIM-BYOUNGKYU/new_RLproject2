@@ -1,0 +1,1 @@
+crash penalty -5 에서 -100으로 강화

@@ -1,0 +1,61 @@
+    def calculate_reward(self, state):
+       
+        # 상태 정보
+        position = state[0]
+        velocity = state[1]
+        angular_velocity = state[3]
+
+        # 로켓의 현재 위치
+        x, y, z = position
+
+        # 목표 궤도로부터의 거리 계산 # 거리 보상 (거리가 짧을수록 보상이 큼)
+        distance = distance_to_polar_orbit(x, y, z, self.target_p+self.R_planet, self.polarorbit_alpha)
+        
+        if self.distance- distance >= -0.01:       # 이전의 distance 가 지금의 distance가 작은 경우(가까워진 경우)
+            distance_reward = 1
+        else:                               # 이전의 distance 가 지금의 distance가 큰 경우(멀어진 경우)
+            distance_reward = -1
+        # alpha = np.exp(-distance/self.target_p)
+
+        if distance <10:
+            distance_reward += 2 * np.exp(-distance/self.target_p)
+        elif distance < 100:
+            distance_reward  += np.exp(-distance/self.target_p)
+
+        self.distance = distance    # distance attribute 업데이트
+
+
+        # timestep 보상
+        timestep_reward = 2*self.step_id/self.max_step
+
+        #속도 보상
+        velocity_reward = 0
+        #norm_velocity = np.linalg.norm(velocity)
+        #if norm_velocity > 0:
+        #    velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
+        #    velocity_reward = velocity_perpend/np.linalg.norm(velocity)*alpha             #거리벡터와 수직인 속도성분이 차지하는 비율 
+
+        #충돌 페널티
+        collision_penalty = 0
+        if x**2+y**2+z**2<=self.R_planet**2:
+            collision_penalty = -100
+
+        # 총 보상 계산
+        reward = distance_reward + timestep_reward + velocity_reward + collision_penalty
+        
+        return reward
+
+
+
+
+        =>
+        
+        # 목표 궤도로부터의 거리 계산 # 거리 보상 (거리가 짧을수록 보상이 큼)
+        distance = distance_to_polar_orbit(x, y, z, self.target_p+self.R_planet, self.polarorbit_alpha)
+        
+        if self.distance- distance >= -0.1*np.exp(-distance):       # 이전의 distance 가 지금의 distance가 작은 경우(가까워진 경우)
+            distance_reward = 1
+        else:                               # 이전의 distance 가 지금의 distance가 큰 경우(멀어진 경우)
+            distance_reward = 0
+
+

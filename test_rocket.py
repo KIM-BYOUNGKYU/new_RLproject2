@@ -3,9 +3,9 @@ import rocket
 falcon9 = rocket.Rocket(max_steps=400000)
 action = []
 for i in range(5):
-    action.append(30)
+    action.append(0)
 for i in range(5):
-    action.append(30)
+    action.append(0)
 for i in range(5):
     action.append(falcon9.max_thrust[0]*0.9)
 for i in range(3):
@@ -17,11 +17,12 @@ for i in range(3):
 
 
 falcon9.step(action)
-for i in range(100000):
+for i in range(10):
     state,reward,done,_=falcon9.step(action)
     print(done)
     if done:
         break
+print(falcon9.state)
 
 falcon9.show_path_from_state_buffer()
 falcon9.animate_trajectory(skip_steps=100)

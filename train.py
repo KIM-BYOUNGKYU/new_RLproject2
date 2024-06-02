@@ -61,17 +61,22 @@ def normalize_state(state):
     return (state - state.mean()) / (state.std() + 1e-8)
 
 def save_data_to_csv(data, filename):
-    header = [
-        'epi_timestep', 'action0_5', 'action5_10', 'action10_15',
-        'state0_3', 'state3_6', 'state6_9', 'state9_12', 'state12', 'state13'
-    ]
     with open(filename, mode='a', newline='') as file:
         writer = csv.writer(file)
-        if file.tell() == 0:  # Check if file is empty to write header
-            writer.writerow(header)
+        writer.writerow(['Epi','Timestep', 'A_0', 'A_1','A_2','A_3','A_4','A_5','A_6','A_7','A_8', 'A_9','A_10','A_11','A_12','A_13','A_14',
+                         'S_0', 'S_1', 'S_2', 'S_3', 'S_4', 'S_5', 'S_6', 'S_7', 'S_8', 'S_9', 'S_10', 'S_11', 'S_12', 'S_13', 'S_13' ])
         for row in data:
-            row = [item.tolist() if torch.is_tensor(item) else item for item in row]
-            writer.writerow(row)
+            writer.writerow([int(row[0])] +
+                            [int(row[1])] + 
+                            [float(x) for x in row[2]] + 
+                            [float(x) for x in row[3]] + 
+                            [float(x) for x in row[4]] + 
+                            [float(x) for x in row[5]] + 
+                            [float(x) for x in row[6]] + 
+                            [float(x) for x in row[7]] + 
+                            [float(x) for x in row[8]] + 
+                            [float(row[9])] + 
+                            [float(row[10])])
 
 def save_pickle(data, filename):
     with open(filename, 'wb') as f:
@@ -91,28 +96,47 @@ def load_data_from_csv(filename):
             next(reader)  # Skip header
             data = [row for row in reader]
     return data
-def train_ppo_agent(env, agent, num_episodes=1000, actor_learning_rate=1e-4, critic_learning_rate=1e-4, gamma=0.99, clip_epsilon=0.09, update_timestep=2000, k_epochs=4, save_path='train_data/', early_stopping_threshold=295):
+
+def save_checkpoint(agent, actor_optimizer, critic_optimizer, episode_rewards, filepath):
+    checkpoint = {
+        'agent_state_dict': agent.state_dict(),
+        'actor_optimizer_state_dict': actor_optimizer.state_dict(),
+        'critic_optimizer_state_dict': critic_optimizer.state_dict(),
+        'episode_rewards': episode_rewards
+    }
+    torch.save(checkpoint, filepath)
+
+def load_checkpoint(filepath, agent, actor_optimizer, critic_optimizer):
+    if os.path.exists(filepath):
+        checkpoint = torch.load(filepath)
+        agent.load_state_dict(checkpoint['agent_state_dict'])
+        actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
+        critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state_dict'])
+        episode_rewards = checkpoint['episode_rewards']
+        return episode_rewards
+    return []
+
+def train_ppo_agent(env, agent, num_episodes=1000, actor_learning_rate=1e-4, critic_learning_rate=1e-4, gamma=0.99, clip_epsilon=0.1, gae_lambda = 0.95,update_timestep=700, k_epochs=4, save_path='train_data/', early_stopping_threshold=350):
     actor_optimizer = optim.Adam([
         {'params': agent.actor.parameters()},
         {'params': agent.log_std, 'lr': actor_learning_rate}
     ], lr=actor_learning_rate)
     critic_optimizer = optim.Adam(agent.critic.parameters(), lr=critic_learning_rate)
     mse_loss = nn.MSELoss()
-    episode_rewards = load_pickle(os.path.join(save_path, 'episode_rewards.pkl')) or []
-    data_to_save = load_data_from_csv(os.path.join(save_path, 'training_data.csv')) or []  # 데이터를 저장할 리스트
-    losses = []
+
+    model_path = os.path.join(save_path, 'ppo_rocket_model.pth')
+    checkpoint_path = os.path.join(save_path, 'checkpoint.pth')
+    csv_path = os.path.join(save_path, 'training_data.csv')
+
+    # 모델과 옵티마이저 상태 불러오기
+    episode_rewards = load_checkpoint(checkpoint_path, agent, actor_optimizer, critic_optimizer)
+    data_to_save =  []
 
     action_low = np.array([-30] * 10 + [0.4 * env.max_thrust[0]] * 5 + [-30] * 6 + [0.4 * env.max_thrust[1]] * 3)
     action_high = np.array([30] * 10 + [env.max_thrust[0]] * 5 + [30] * 6 + [env.max_thrust[1]] * 3)
 
-    model_path = os.path.join(save_path, 'ppo_rocket_model.pth')
-    csv_path = os.path.join(save_path, 'training_data.csv')
-
     timestep = 0
-    # 모델이 존재하면 로드
-    if os.path.exists(model_path):
-        agent.load_state_dict(torch.load(model_path))
-        
+
     for episode in range(num_episodes):
         state = env.reset()
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
@@ -130,11 +154,9 @@ def train_ppo_agent(env, agent, num_episodes=1000, actor_learning_rate=1e-4, cri
 
             next_state, reward, done, _ = env.step(scaled_action)
             next_state = torch.FloatTensor(next_state).unsqueeze(0).to(device)
-            episode_reward = reward + gamma*episode_reward
-            advantage = reward + gamma * agent(next_state)[1].item() - agent(state)[1].item()
-            advantage = torch.tensor(advantage).view(-1, 1).detach().to(device)
-            # 데이터 저장
+            episode_reward = reward + gamma * episode_reward
             data_to_save.append([
+                len(episode_rewards),
                 epi_timestep,
                 scaled_action[0:5].tolist(),
                 scaled_action[5:10].tolist(),
@@ -146,77 +168,96 @@ def train_ppo_agent(env, agent, num_episodes=1000, actor_learning_rate=1e-4, cri
                 temp_state[0][12].item() if torch.is_tensor(next_state[0][12]) else next_state[0][12],
                 temp_state[0][13].item() if torch.is_tensor(next_state[0][13]) else next_state[0][13]
             ])
-            episode_data.append((state, action, action_log_prob, advantage, reward, next_state))
+            episode_data.append((state.clone().detach(), action.clone().detach(), action_log_prob.clone().detach(), reward, next_state.clone().detach()))
 
             if timestep % update_timestep == 0 or done:
+                # GAE를 사용하여 advantage를 계산
+                rewards = [data[3] for data in episode_data]
+                values = [agent(data[0])[1].item() for data in episode_data]
+                next_values = values[1:] + [agent(episode_data[-1][4])[1].item()]
+                deltas = [r + gamma * nv - v for r, nv, v in zip(rewards, next_values, values)]
+
+                gae = 0
+                advantages = []
+                for delta in reversed(deltas):
+                    gae = delta + gamma * gae_lambda * gae
+                    advantages.insert(0, gae)
+
+                returns = [adv + val for adv, val in zip(advantages, values)]
+
                 for _ in range(k_epochs):
-                    for state, action, action_log_prob, advantage, reward, next_state in episode_data:
-                        state = normalize_state(state)
-                        action_mean, state_value = agent(state)
+                    for i in range(0, len(episode_data), update_timestep):
+                        batch_data = episode_data[i:i + update_timestep]
+                        batch_advantages = advantages[i:i + update_timestep]
+                        batch_returns = returns[i:i + update_timestep]
+
+                        states = torch.cat([data[0] for data in batch_data]).to(device)
+                        actions = torch.cat([data[1] for data in batch_data]).to(device)
+                        old_log_probs = torch.cat([data[2] for data in batch_data]).to(device)
+                        batch_advantages = torch.tensor(batch_advantages).view(-1, 1).to(device).clone().detach()
+                        batch_returns = torch.tensor(batch_returns).view(-1, 1).to(device).clone().detach()
+
+                        action_mean, state_values = agent(states)
                         action_log_std = agent.log_std.expand_as(action_mean)
                         action_std = torch.exp(action_log_std)
                         normal = Normal(action_mean, action_std)
-                        log_prob = normal.log_prob(action).sum(dim=-1)
-                        ratio = torch.exp(log_prob - action_log_prob.detach())
-                        surr1 = ratio * advantage
-                        surr2 = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon) * advantage
+                        log_probs = normal.log_prob(actions).sum(dim=-1)
+                        ratios = torch.exp(log_probs - old_log_probs)
+                        surr1 = ratios * batch_advantages
+                        surr2 = torch.clamp(ratios, 1 - clip_epsilon, 1 + clip_epsilon) * batch_advantages
                         actor_loss = -torch.min(surr1, surr2).mean()
-                        critic_loss = mse_loss(state_value, torch.tensor([reward + gamma * agent(next_state)[1].item()]).view(-1, 1).float().to(device).detach())
+                        critic_loss = mse_loss(state_values, batch_returns)
 
-                        # Actor 네트워크 업데이트
                         actor_optimizer.zero_grad()
                         actor_loss.backward(retain_graph=True)
                         actor_optimizer.step()
 
-                        # Critic 네트워크 업데이트
                         critic_optimizer.zero_grad()
-                        critic_loss.backward()
+                        critic_loss.backward(retain_graph=True)
                         critic_optimizer.step()
 
-                        losses.append((actor_loss.detach().cpu().numpy(), critic_loss.detach().cpu().numpy()))
 
                 episode_data = []
 
             state = next_state
 
             if done:
-                
                 break
-
         episode_rewards.append(episode_reward)
 
         # 에피소드 보상 출력
         print(f"Episode {len(episode_rewards)}, Reward: {episode_reward}")
-        print("Updated log_std:", agent.log_std)
 
         # 모델 저장 및 데이터 저장
-        if (episode + 1) % 25 == 0:
-            torch.save(agent.state_dict(), model_path)
+        if len(episode_rewards) % 50 == 0 :
+            save_checkpoint(agent, actor_optimizer, critic_optimizer, episode_rewards, checkpoint_path)
             save_data_to_csv(data_to_save, csv_path)
             save_pickle(episode_rewards, os.path.join(save_path, 'episode_rewards.pkl'))
             data_to_save = []  # 저장 후 리스트 초기화
+            #if(episode +1)%75 == 0:
+                #env.show_path_from_state_buffer()
+                #env.animate_trajectory(skip_steps=100)
 
         # 평균 보상 계산 및 종료 조건 확인
-        if len(episode_rewards) >= 100:
-            average_reward = np.mean(episode_rewards[-100:])
-            print(f"Episode {episode + 1}, Average Reward (last 100 episodes): {average_reward}")
+        if len(episode_rewards) >= 15:
+            average_reward = np.mean(episode_rewards[-15:])
+            print(f"Episode {episode + 1}, Average Reward (last 15 episodes): {average_reward}")
             if average_reward >= early_stopping_threshold:
                 print(f"Early stopping at episode {episode + 1} with average reward {average_reward}")
                 break
     
-    
     return episode_rewards
-
+    
 if __name__=='__main__':
     env = Rocket()  # Rocket 환경 인스턴스
     state_dim = env.state_dims
     action_dim = env.action_dims
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     agent = PPORocketAgent(state_dim, action_dim).to(device)
-
+    
     # Train the agent
     episode_rewards = []
-    episode_rewards = train_ppo_agent(env, agent, num_episodes=5000, save_path = Path, early_stopping_threshold=295)
+    episode_rewards = train_ppo_agent(env, agent, num_episodes=1, save_path = Path, early_stopping_threshold=550)
     plt.plot(episode_rewards)
     plt.xlabel('Episode')
     plt.ylabel('Reward')

@@ -70,7 +70,8 @@ def transform_inverse_coordinates(coordinates, roll, pitch, yaw):
 
 def distance_to_polar_orbit(x, y, z, R, alpha):
     """
-    임의의 점 (x, y, z)와 북극을 지나는 반경 R의 극궤도 사이의 가장 가까운 거리를 계산합니다.
+    임의의 점 (x, y, z)와 북극을 지나는 반경 R의 극궤도 사이의 가장 가까운 거리를 계산
+    => reward 계산 시 사용
     
     x, y, z: 임의의 점의 좌표
     R: 극궤도의 반경
@@ -93,7 +94,7 @@ def distance_to_polar_orbit(x, y, z, R, alpha):
     return distance
 
 class Rocket(object):
-    def __init__(self, max_steps=400000, task='launching', rocket_type='falcon-4',
+    def __init__(self, max_steps=110000, task='launching', rocket_type='falcon-4',
                  viewport_h=768, path_to_bg_img=None, fault=False):
 
         self.task = task
@@ -116,7 +117,7 @@ class Rocket(object):
 
         self.mass=[553000, 119800, 8300]                # rocket의 stage별 질량 [초기질량, 1단 분리 이후 질량, 2단 분리 이후 인공위성 질량]
         self.fuel_mass=[411000, 107500, 0]               # stage별 가용 연료 질량 TODO: 1단 분리 이후 질량과 연료값? / 연소시간기준 1단 162초, 2단 397초
-        self.engine_cutoff_fuelmass = [36000,0,-9999]
+        self.engine_cutoff_fuelmass = [36000,0,-9999]   # 분리작업이 진행되는 cutoff fuel mass (1단계는 회수작업을 위한 연료를 남긴다.)
         
         self.d_CM_e=[(0,0,-25),(0,0,-5),(0,0,0)]    # stage별 질량중심과 엔진사이의 거리
         self.CD = [0.4839, 0, 0]                    # stage별 coefficient of drag 공기저항 계수입니다.
@@ -149,6 +150,7 @@ class Rocket(object):
             self.state = self.create_initial_state()
         else:
             self.state = state_list
+        self.current_mass = self.mass[0]
         self.I = [0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12, 
                   0.25 * self.current_mass * (self.D ** 2) + self.current_mass * (self.H[self.state[5]] ** 2) / 12,
                   0.5 * self.current_mass * (self.D ** 2)] 
@@ -185,10 +187,13 @@ class Rocket(object):
         phi = 45
         theta = 0
         # 초기 위치 벡터
-        position = transform_coordinates(np.array([0,0,self.R_planet]),phi,theta,0)
+        #position = transform_coordinates(np.array([0,0,self.R_planet]),phi,theta,0)
+        position = np.array([0,-4504977.55172305,  4504977.55172305])
         self.distance = distance_to_polar_orbit(position[0], position[1], position[2], self.target_p+self.R_planet, self.polarorbit_alpha)
+        
         # 초기 속도 (정지 상태)
-        velocity = np.array([0.0, 0.0, 0.0])
+        #velocity = np.array([0.0, 0.0, 0.0])
+        velocity = np.array([0, -0.99554313,  0.99554313])
 
         # 초기 발사 각도 (지구 중심에서 벗어나는 방향)
         angle = np.array([phi, theta, 0.0])  
@@ -273,7 +278,7 @@ class Rocket(object):
                     total_thrust +=thrust                            # thrust vector의 합                            
                     total_torque +=np.cross(np.array(self.d_CM_e[stage])+np.array(self.r_engines[stage][i]),thrust)
 
-                mdot -= sum([min(f,self.max_thrust[stage]) for f in thrust]) / (self.g * self.Isp[self.state[5]])   # thrust에 따른 연료소모속도
+                mdot -= sum([min(f,self.max_thrust[stage]) for f in thrusts]) / (self.g * self.Isp[self.state[5]])   # thrust에 따른 연료소모속도
         
         angular_velocity0 = list(action[0:self.num_engines[0]]) + list(action[self.num_engines[0]*3:self.num_engines[0]*3+self.num_engines[1]])
         angular_velocity1 = list(action[self.num_engines[0]:self.num_engines[0]*2]) + list(action[self.num_engines[0]*3+self.num_engines[1]:self.num_engines[0]*3+self.num_engines[1]*2])
@@ -293,7 +298,6 @@ class Rocket(object):
         r = np.sqrt(x**2 + y**2 + z**2)
 
         if (r < self.R_planet):
-            new_position = new_position*self.R_planet/r
             new_velocity = np.array([0,0,0])
 
         new_rot_angle = np.add(state[2], state[3]*self.dt)
@@ -340,9 +344,7 @@ class Rocket(object):
         vx,vy,vz = self.state[1]
         r = np.sqrt(x**2 + y**2 + z**2)
         altitude = r-self.R_planet
-        if (altitude ==0):
-            crash = True
-        if vx==0 and vy==0 and vz==0:
+        if (altitude <= 0):
             crash = True
         if (altitude > self.target_p+5000):
             crash = True
@@ -411,28 +413,38 @@ class Rocket(object):
 
         # 목표 궤도로부터의 거리 계산 # 거리 보상 (거리가 짧을수록 보상이 큼)
         distance = distance_to_polar_orbit(x, y, z, self.target_p+self.R_planet, self.polarorbit_alpha)
-        if self.distance < distance:
+        
+        if self.distance- distance >= -0.1*np.exp(-distance):       # 이전의 distance 가 지금의 distance가 작은 경우(가까워진 경우)
             distance_reward = 1
-        
-        alpha = np.exp(-distance/self.target_p)
-        
-        # 안정성 보상 (각속도가 작을수록 보상이 큼)
-        angular_velocity_stability = np.exp(-np.linalg.norm(angular_velocity))*alpha
+        else:                               # 이전의 distance 가 지금의 distance가 큰 경우(멀어진 경우)
+            distance_reward = 0
+        # alpha = np.exp(-distance/self.target_p)
+
+        if distance <10:
+            distance_reward += 2 * np.exp(-distance/self.target_p)
+        elif distance < 100:
+            distance_reward  += np.exp(-distance/self.target_p)
+
+        self.distance = distance    # distance attribute 업데이트
+
+
+        # timestep 보상
+        timestep_reward = 2*self.step_id/self.max_step
 
         #속도 보상
         velocity_reward = 0
-        norm_velocity = np.linalg.norm(velocity)
-        if norm_velocity > 0:
-            velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
-            velocity_reward = velocity_perpend/np.linalg.norm(velocity)*alpha             #거리벡터와 수직인 속도성분이 차지하는 비율 
+        #norm_velocity = np.linalg.norm(velocity)
+        #if norm_velocity > 0:
+        #    velocity_perpend = abs(np.dot(velocity,position))/np.linalg.norm(position)
+        #    velocity_reward = velocity_perpend/np.linalg.norm(velocity)*alpha             #거리벡터와 수직인 속도성분이 차지하는 비율 
 
         #충돌 페널티
         collision_penalty = 0
-        if x**2+y**2+z**2==self.R_planet**2:
-            collision_penalty = -5
+        if x**2+y**2+z**2<=self.R_planet**2:
+            collision_penalty = -100
 
         # 총 보상 계산
-        reward = distance_reward + angular_velocity_stability + velocity_reward + collision_penalty
+        reward = distance_reward + timestep_reward + velocity_reward + collision_penalty
         
         return reward
 

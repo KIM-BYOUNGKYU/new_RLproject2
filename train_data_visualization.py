@@ -5,15 +5,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # Load the data from the uploaded CSV file
-file_path = 'train_data/storage/14_reward_modification/training_data.csv'
+file_path = 'train_data/storage/25_GAE2/training_data.csv'
 data = pd.read_csv(file_path)
 
 # Determine the episodes by identifying when the timestep resets to 1
 data['episode'] = (data['epi_timestep'] == 1).cumsum()
-print(data)
+
 # Calculate the length of each episode
 episode_lengths = data.groupby('episode')['epi_timestep'].max()
-
+print(episode_lengths)
 # Identify the episode with the longest length
 longest_episode = episode_lengths.idxmax()
 
