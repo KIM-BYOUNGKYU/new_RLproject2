@@ -405,8 +405,6 @@ class Rocket(object):
        
         # 상태 정보
         position = state[0]
-        velocity = state[1]
-        angular_velocity = state[3]
 
         # 로켓의 현재 위치
         x, y, z = position
@@ -532,6 +530,7 @@ class Rocket(object):
 
         # 애니메이션 정의
         ani = FuncAnimation(fig, self.update, frames=len(data[0]), fargs=(data, line, marker, ax), interval=10) # interval 프레임간 시간 간격 ms
+        ani.save('trajectory.gif', fps = 24)
         plt.show()
 
     def update(self, num, data, line, marker, ax):
@@ -558,3 +557,51 @@ class Rocket(object):
             ax.set_xlim([-max_range, max_range])
             ax.set_ylim([-max_range, max_range])
             ax.set_zlim([-max_range, max_range])
+
+    def animate_trajectory_noearth(self, skip_steps=1):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # 데이터 초기화 및 skip_steps 적용
+        data = np.array([state[0] for state in self.state_buffer[::skip_steps]]).T
+        line, = ax.plot([], [], [], 'r-', label="Trajectory")  # 빈 궤적 초기화
+        marker, = ax.plot([], [], [], 'bo', markersize=5, label="Rocket")  # 로켓 마커 초기화
+
+        # 축 라벨 설정
+        ax.set_xlabel('X position')
+        ax.set_ylabel('Y position')
+        ax.set_zlabel('Z position')
+        ax.legend()
+
+        # 애니메이션 정의
+        ani = FuncAnimation(fig, self.update2, frames=len(data[0]), fargs=(data, line, marker, ax), interval=100) # interval 프레임간 시간 간격 ms
+        ani.save('trajectory.gif', fps = 24)
+        plt.show()
+
+    def update2(self, num, data, line, marker, ax):
+        # 마커 위치 업데이트
+        if num < len(data[0]):
+            marker.set_data(data[0, num], data[1, num])
+            marker.set_3d_properties(data[2, num])
+
+            # 궤적 데이터 업데이트
+            line.set_data(data[0, :num+1], data[1, :num+1])
+            line.set_3d_properties(data[2, :num+1])
+
+            xmin = min(data[0])
+            xmax = max(data[0])
+            ymin = min(data[1])
+            ymax = max(data[1])
+            zmin = min(data[2])
+            zmax = max(data[2])
+            d = 10
+            length = max( max( xmax-xmin,ymax-ymin),zmax-zmin)
+            x = (xmin+xmax)/2
+            y = (ymin+ymax)/2
+            z = (zmin+zmax)/2
+            
+            ax.set_xlim([x-length/2-d,x+length/2+d])
+            ax.set_ylim([y-length/2-d,y+length/2+d])
+            ax.set_zlim([z-length/2-d,z+length/2+d])
+
+            

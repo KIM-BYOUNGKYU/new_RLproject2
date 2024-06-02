@@ -21,20 +21,17 @@ class PPORocketAgent(nn.Module):
         super(PPORocketAgent, self).__init__()
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 512),
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.Linear(512, 512),
-            nn.LeakyReLU(),
-            nn.Linear(512, 512),
-            nn.LeakyReLU(),
-            nn.Linear(512, action_dim)
+            nn.Tanh(),
+            nn.Linear(512, action_dim),
+            nn.Sigmoid()
         )
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 512),
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.Linear(512, 512),
-            nn.LeakyReLU(),
-            nn.Linear(512, 512),
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.Linear(512, 1)
         )
         self.log_std = nn.Parameter(torch.ones(action_dim) * 0.1)
@@ -53,8 +50,8 @@ class PPORocketAgent(nn.Module):
 
 def scale_action(action, low, high):
     # Ensure action is within [-1, 1]
-    action = np.clip(action, -1, 1)
-    scaled_action = low + (0.5 * (action + 1.0) * (high - low))
+    action = np.clip(action, 0, 1)
+    scaled_action = low +  (action) * (high - low)
     return scaled_action
 
 def normalize_state(state):
@@ -257,7 +254,7 @@ if __name__=='__main__':
     
     # Train the agent
     episode_rewards = []
-    episode_rewards = train_ppo_agent(env, agent, num_episodes=1, save_path = Path, early_stopping_threshold=550)
+    episode_rewards = train_ppo_agent(env, agent, num_episodes=10000, save_path = Path, early_stopping_threshold=550)
     plt.plot(episode_rewards)
     plt.xlabel('Episode')
     plt.ylabel('Reward')

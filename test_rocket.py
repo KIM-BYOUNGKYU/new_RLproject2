@@ -17,7 +17,7 @@ for i in range(3):
 
 
 falcon9.step(action)
-for i in range(10):
+for i in range(100000):
     state,reward,done,_=falcon9.step(action)
     print(done)
     if done:
