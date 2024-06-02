@@ -1,4 +1,22 @@
+# OUTLINE
+
+train_data/storage 폴더에는 이번 프로젝트에서 학습한 모델이 거의 다 담겨있습니다.
+
+폴더에 옮기지 않고 바로 수정한 부분도 있어서 모두 반영되어 있지는 않으니 주의해 주십시오.
+
+용량문제로 인해 후반 train data의 training csv파일은 없습니다. 
+
+실폐한 코드 혹은 문제가 있어 버린 코드는 failed 폴더에 넣어놨습니다.
+
+rocket_modeling_reference는 초기 로켓 모델 구성시 참고한 코드입니다. 그러나 두 프로젝트가 자향하는 바가 다르므로 많은 부분에서 차이가 있습니다.
 #https://github.com/cmontalvo251/aerospace/blob/main/rockets/rocket_seminar_series/two_stage_rocket_w_aerodynamics.py
+
+- rocket.py는 로켓 env 구성하는 파일입니다
+- test_rocket.py는 로켓 env가 잘 작동하는지 확인하는 파일입니다. (원하는 action값을 넣어 결과를 얻을 수 있습니다.)
+- train.py는 학습시 실행하는 파일입니다. 학습 모델의 구성이 들어있습니다. episode를 바꿔가며 실행하면 됩니다. 파일내 Path라는 변수에 저장 경로가 지정되어 있습니다.
+- trina.ipynb는 colab에서 구동시 사용하는 파일이지만 colab의 runtime문제로 업데이트 안 한지 꽤 되어 실행에 문재가 있을 수 있습니다.
+- test_model은 학습한 모델을 가져와 실행시켜보는 파일입니다.  파일내 Path라는 변수에 load 경로가 지정되어 있습니다.
+- train_data_visualizaion.py는 training_data.csv 파일을 시각화해주는 파일입니다.
 
 # action space
 - 5개의 엔진 x축방향 각속도 (-30~30)
@@ -109,6 +127,8 @@ rocket.py
 rocket.py
 - 1.1 검토 및 1.2(소모량 대비 고도 보상) 추가
 
+5.26-6.2 김병규 작업
+- 계속 학습하고 수정 반봅
 
 ---
 
@@ -116,18 +136,18 @@ rocket.py
 (구현 필요해 보이는 부분 추가하기, 완료했으면 취소선으로 변경)
 
 
- ~* flatten 함수 구현 : line45 
+ ~~* flatten 함수 구현 : line45~~ 
 
 
- 7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수 
+ ~~7개의 요소의 list를 input으로 받아서 30개의 element를 갖는 list로 풀어주는 함수~~ 
 
 
-이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임.~
+~~이 함수를 구현해야 나중에 NN에 state를 input으로 집어넣기 쉬울 것임.~~
 
-* 기본적인 변수들을 실제값으로 변경.
-* 그래프 그리는 method 만들고 실제 동작 확인.
-* calculate_reward 부분 구현.
-* policy.py 검토 및 전체적인 RL 구성하기
-* visualization: 제대로 학습 되었는지 확인하는 부분 첨가
-* get_new_state: y좌표 계산 필요
+* ~~기본적인 변수들을 실제값으로 변경.~~
+* ~~그래프 그리는 method 만들고 실제 동작 확인.~~
+* ~~calculate_reward 부분 구현.~~
+* ~~policy.py 검토 및 전체적인 RL 구성하기~~
+* ~~visualization: 제대로 학습 되었는지 확인하는 부분 첨가~~
+* ~~get_new_state: y좌표 계산 필요~~
 
